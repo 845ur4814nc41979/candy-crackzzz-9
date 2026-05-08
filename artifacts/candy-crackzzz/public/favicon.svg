@@ -1,0 +1,31 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="48" y1="40" x2="456" y2="472" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#090A16"/>
+      <stop offset="0.52" stop-color="#17122D"/>
+      <stop offset="1" stop-color="#2B1147"/>
+    </linearGradient>
+    <linearGradient id="candy" x1="110" y1="110" x2="392" y2="402" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1EEBFF"/>
+      <stop offset="0.5" stop-color="#4FB4FF"/>
+      <stop offset="1" stop-color="#FF4FD8"/>
+    </linearGradient>
+    <linearGradient id="drip" x1="160" y1="310" x2="352" y2="432" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF38D4"/>
+      <stop offset="1" stop-color="#B52FFF"/>
+    </linearGradient>
+    <filter id="glow" x="85" y="74" width="342" height="354" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="14" result="effect1_foregroundBlur"/>
+    </filter>
+  </defs>
+  <rect x="20" y="20" width="472" height="472" rx="112" fill="url(#bg)"/>
+  <rect x="20" y="20" width="472" height="472" rx="112" stroke="#FF3EC9" stroke-opacity="0.24" stroke-width="8"/>
+  <g filter="url(#glow)">
+    <path d="M366 143C345 122 314 112 270 112C185 112 130 169 130 255C130 340 184 400 269 400C313 400 345 390 367 367" stroke="url(#candy)" stroke-width="54" stroke-linecap="round"/>
+    <path d="M208 315H347C356 315 364 322 364 331V344C364 353 357 360 348 360H323V380C323 391 314 400 303 400C292 400 283 391 283 380V360H249V386C249 397 240 406 229 406C218 406 209 397 209 386V360H208C199 360 192 353 192 344V331C192 322 199 315 208 315Z" fill="url(#drip)"/>
+  </g>
+  <circle cx="384" cy="128" r="18" fill="#FF4FD8" fill-opacity="0.8"/>
+  <circle cx="136" cy="392" r="12" fill="#1EEBFF" fill-opacity="0.85"/>
+</svg>

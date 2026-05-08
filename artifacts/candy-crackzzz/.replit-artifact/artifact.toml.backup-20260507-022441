@@ -1,0 +1,33 @@
+kind = "web"
+previewPath = "/"
+title = "Candy Crackzzz"
+version = "1.0.0"
+id = "artifacts/candy-crackzzz"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 5001
+
+[services.development]
+run = "pnpm --filter @workspace/candy-crackzzz run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/candy-crackzzz", "run", "build" ]
+publicDir = "artifacts/candy-crackzzz/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "5001"
+FRONTEND_PORT = "5001"
+API_PORT = "3001"
+BASE_PATH = "/"

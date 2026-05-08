@@ -1,0 +1,255 @@
+We need to permanently fix and protect the Candy CrackZZZ 8.4 Replit startup architecture so future imports do not repeat the white screen / 502 / port-conflict problem.
+
+Do not add features.
+Do not add Twilio, Resend, Vonage, rewards, referralzzz, staff referralzzz, UI changes, product changes, payment changes, or admin changes.
+Do not change app business logic.
+Only fix, document, guard, test, commit, and push the startup/routing architecture.
+
+Critical final architecture confirmed by the fresh Replit test:
+
+1. Start application workflow:
+   - runs scripts/replit-start.sh
+   - owns only embedded Preview proxy on port 5000
+   - must NOT start Vite
+   - must NOT start API
+   - must NOT start artifact-router
+
+2. artifacts/candy-crackzzz: web workflow:
+   - owns Vite frontend on port 5001
+   - required for the app frontend and public/artifact workflow
+
+3. artifacts/api-server: API Server workflow:
+   - owns Express API on port 3001
+
+4. scripts/proxy-server.cjs:
+   - allowed only as embedded Preview proxy
+   - proxies 5000 → 5001
+   - not the same as Replit artifact-router
+
+5. Replit artifact-router:
+   - must NOT be manually started from scripts/replit-start.sh
+   - must be started only by the native Replit artifact workflow if needed
+
+What happened during the fresh import:
+- Agent initially changed scripts/replit-start.sh to launch all three services: proxy, Vite, and API.
+- That was wrong.
+- It caused the artifact workflows to fail because ports 5001 and 3001 were already taken.
+- The correct fix was to revert scripts/replit-start.sh so it only launches the preview proxy on 5000.
+- After that, all workflows were healthy:
+  - Start application = proxy 5000
+  - artifacts/candy-crackzzz: web = Vite 5001
+  - artifacts/api-server: API Server = API 3001
+- Admin login worked with default password: CandyCrackzzzTemp1!
+- E2E tests passed.
+
+Goal:
+Make this architecture self-documenting and hard to accidentally break later.
+
+Step 1 — Inspect current state
+
+Run:
+
+cd /home/runner/workspace
+
+echo "=== Git state ==="
+git status
+git log --oneline --max-count=8
+git remote -v
+
+echo "=== .replit ==="
+cat .replit
+
+echo "=== Start script ==="
+sed -n '1,260p' scripts/replit-start.sh
+
+echo "=== Proxy script ==="
+sed -n '1,220p' scripts/proxy-server.cjs
+
+echo "=== Frontend artifact ==="
+sed -n '1,180p' artifacts/candy-crackzzz/.replit-artifact/artifact.toml
+
+echo "=== API artifact ==="
+sed -n '1,180p' artifacts/api-server/.replit-artifact/artifact.toml
+
+echo "=== Diagnose script ==="
+sed -n '1,260p' scripts/diagnose-replit.sh || true
+
+Step 2 — Ensure scripts/replit-start.sh is proxy-only
+
+Update scripts/replit-start.sh if needed.
+
+Requirements:
+- It must only start the embedded Preview proxy on port 5000.
+- It must proxy to Vite target port 5001.
+- It must install dependencies if needed.
+- It may run DB push only if DATABASE_URL exists, but it must not start API.
+- It must not start Vite.
+- It must not start pnpm --filter @workspace/candy-crackzzz run dev.
+- It must not start pnpm --filter @workspace/api-server run dev.
+- It must not start Replit artifact-router.
+- It should clearly say in comments:
+  “Do not add Vite or API startup here. Those are owned by artifact workflows. Starting them here causes port conflicts and broken imports.”
+
+The script should only manage:
+- lock folder
+- optional pnpm install
+- optional DB push if safe
+- free port 5000 only
+- start proxy-server.cjs with PREVIEW_PROXY_PORT=5000 and VITE_TARGET_PORT=5001
+- keep proxy alive
+
+Step 3 — Add guardrails so future Agents cannot easily break it
+
+Add a new script:
+
+scripts/validate-replit-startup.sh
+
+It must be non-destructive.
+It should fail with exit code 1 if any of these are true:
+
+1. scripts/replit-start.sh contains:
+   pnpm --filter @workspace/candy-crackzzz run dev
+
+2. scripts/replit-start.sh contains:
+   pnpm --filter @workspace/api-server run dev
+
+3. scripts/replit-start.sh contains:
+   REPLIT_ARTIFACT_ROUTER
+
+4. scripts/replit-start.sh contains:
+   artifact-router
+
+5. .replit has a duplicate Project workflow that runs Start application or also calls scripts/replit-start.sh.
+
+6. artifacts/candy-crackzzz/.replit-artifact/artifact.toml does not have:
+   localPort = 5001
+   PORT = "5001"
+   FRONTEND_PORT = "5001"
+   API_PORT = "3001"
+
+7. artifacts/api-server/.replit-artifact/artifact.toml does not have:
+   localPort = 3001
+   PORT = "3001"
+
+The script should print a clear explanation for each failed check:
+- what is wrong
+- why it breaks fresh Replit imports
+- what file to fix
+
+Make it executable:
+chmod +x scripts/validate-replit-startup.sh
+
+Step 4 — Update diagnose script
+
+Update scripts/diagnose-replit.sh so it clearly says:
+
+Expected:
+- 5000 = Start application embedded Preview proxy
+- 5001 = artifact web workflow Vite frontend
+- 3001 = API artifact workflow
+
+It should warn:
+- If 5000 works but 5001 fails, Start application proxy is running but frontend artifact workflow is down.
+- If 5001 works but 3001 fails, frontend is running but API artifact workflow is down.
+- If Start application launches Vite/API, that is wrong.
+- If artifact workflow fails due to port in use, check whether Start application was incorrectly changed to launch Vite/API.
+
+Add a line telling the user:
+“Do not fix 5001/3001 failures by adding Vite/API startup to scripts/replit-start.sh. Start/restart the artifact workflows instead.”
+
+Step 5 — Update documentation
+
+Create or update:
+
+REPLIT_IMPORT_FIX.md
+
+Also create a short plain-English file if it does not exist:
+
+REPLIT_STARTUP_RULES.md
+
+Put this at the top:
+
+Candy CrackZZZ 8.4 Replit startup rule:
+
+Start application is proxy-only.
+Do not start Vite or API from scripts/replit-start.sh.
+
+Port ownership:
+- 5000 = Start application proxy
+- 5001 = artifacts/candy-crackzzz: web
+- 3001 = artifacts/api-server: API Server
+
+If embedded Preview is white:
+- check proxy 5000 and Vite 5001
+- if Vite 5001 is down, start/restart artifacts/candy-crackzzz: web
+- do not add Vite startup to Start application
+
+If public URL is 502:
+- check artifact workflow/public routing
+- do not touch React first
+
+If API calls fail:
+- check artifacts/api-server workflow
+- do not add API startup to Start application
+
+If a future Agent wants to “fix” the start script by launching all services:
+- reject that change
+- it creates port conflicts
+- it breaks artifact workflows
+
+Step 6 — Add validation to package scripts if safe
+
+Check root package.json.
+
+If safe, add a script:
+
+"validate:replit": "bash scripts/validate-replit-startup.sh"
+
+Do not break existing scripts.
+
+Step 7 — Run tests
+
+Run:
+
+bash scripts/validate-replit-startup.sh
+bash scripts/diagnose-replit.sh
+
+Build/typecheck:
+
+pnpm --filter @workspace/candy-crackzzz run build
+pnpm --filter @workspace/api-server run build
+pnpm --filter @workspace/candy-crackzzz run typecheck
+
+Runtime checks if workflows are running:
+
+curl -si http://127.0.0.1:5000/ | head -10
+curl -si http://127.0.0.1:5001/ | head -10
+curl -si http://127.0.0.1:3001/api/cc/bootstrap | head -10
+
+Step 8 — Commit and push
+
+Commit only these guardrail/startup/documentation changes.
+
+Suggested commit message:
+Lock Replit startup to proxy-only workflow
+
+Push to origin main.
+
+Step 9 — Final report
+
+Use these headings:
+
+1. What was permanently fixed
+2. Why Start application must stay proxy-only
+3. What owns each port
+4. What guardrails were added
+5. What files changed
+6. Validation results
+7. Build/typecheck results
+8. Runtime check results
+9. Commit hash
+10. Push status
+11. What future Agents must not change
+
+End with:
+Confirmed protected against the Start application launching Vite/API again: yes/no.

@@ -1,0 +1,334 @@
+We are working in the existing Candy CrackZZZ 8.4 repository. Do not rebuild the app from scratch. Inspect the current structure first and preserve the existing pnpm monorepo, Replit startup, API server, frontend, admin protection, and file-storage/database fallback behavior.
+
+Primary goal:
+Improve and fine-tune the rewards, customer referral, and staff referral system because this will be one of the main marketing strategies for Candy CrackZZZ.
+
+Important technical rules:
+- Use pnpm, not npm.
+- Preserve the existing Replit startup architecture.
+- Keep API on port 3001.
+- Keep Vite/frontend behind the preview setup already in the repo.
+- Do not remove or break scripts/replit-start.sh.
+- Do not remove or break scripts/proxy-server.cjs.
+- Do not require Stripe, Square, Twilio, Resend, Google, or OpenAI API keys for this step.
+- Do not require a paid API.
+- Keep everything working with the existing file-storage fallback when DATABASE_URL is not set.
+- Preserve admin login protection.
+- Make sure pnpm run validate:replit still passes.
+- Make sure pnpm run typecheck and pnpm run build pass before finishing.
+
+Main feature set to build:
+
+1. Customer Rewards System
+
+Create or improve the customer rewards profile system.
+
+Each customer should be trackable by phone number and optionally name/email.
+
+Rewards profile should show:
+- Customer name
+- Phone
+- Email
+- Current points balance
+- Lifetime points earned
+- Lifetime points redeemed
+- Total completed orders
+- Total amount spent
+- Birthday, optional
+- Referral code assigned to that customer
+- Referred by code, if applicable
+- Notes/admin notes
+- Status: active, inactive, flagged
+
+Rewards earning rules should be configurable from admin settings:
+- Points per dollar spent
+- First order bonus points
+- Birthday bonus points
+- Double points toggle
+- Spend threshold bonus, example: spend $50 and get bonus points
+- Whether points are awarded when order is placed or only when order is marked completed
+- Whether rewards can stack with referrals/promotions
+- Minimum points required to redeem
+- Maximum points allowed per order
+- Option to disable rewards globally
+
+Admin should be able to:
+- Search customer reward profiles
+- Manually add points
+- Manually subtract points
+- Add an internal reason/note for manual point adjustments
+- View customer points history
+- See which orders generated points
+- See which redemptions used points
+
+Customer-facing side should show simple reward language:
+- “Earn points on every order”
+- “Share your referral code”
+- “Use points toward eligible candy or merch”
+Do not require a full customer login yet unless the app already has one. Keep this simple and phone/order based for now.
+
+2. Customer Referral System
+
+Every customer reward profile should have a unique referral code.
+
+Referral codes should be simple and shareable, for example:
+- CANDY-AUSTIN123
+- CCZ-AB12CD
+- or another clean format.
+
+Customer referral workflow:
+- Existing customer shares referral code.
+- New customer enters referral code during checkout/order request.
+- Referral code gets attached to the order and the new customer profile.
+- The referred customer gets a configurable bonus, such as points or discount.
+- The referring customer gets a configurable bonus after the referred customer’s first completed order.
+
+Admin settings should control:
+- Enable/disable customer referrals
+- Referrer bonus points
+- New customer bonus points
+- Whether referral bonus is awarded immediately or after completed order
+- One referral bonus per new customer
+- Referral expiration, optional
+- Minimum order amount for referral reward
+- Whether referrals can stack with other promotions
+
+Admin referral dashboard should show:
+- Total referral orders
+- Top referring customers
+- Referral code used
+- New customer name/phone
+- Referrer name/phone
+- Pending referral rewards
+- Completed referral rewards
+- Flagged/suspicious referrals
+
+Fraud/abuse prevention:
+- Do not let a customer refer themselves using the same phone number.
+- Only allow one “referred by” code per customer.
+- Prevent repeated referral bonuses for the same referred customer.
+- Allow admin to manually approve, reject, or flag referrals if needed.
+
+3. Staff Referral System
+
+Add a separate staff referral system that is different from customer referrals.
+
+Each staff member or promoter should be able to have a unique staff referral code.
+
+Staff referral examples:
+- STAFF-MARY
+- STAFF-AUSTIN
+- CCZ-MARY10
+- CCZ-EVENT01
+
+Staff referrals should be used to track who brought in the customer/order.
+
+Staff referral workflow:
+- Customer enters a staff referral code at checkout/order request.
+- Order is tagged with the staff referral code.
+- Staff referral gets credit for that order.
+- Admin can see how many orders each staff member brought in.
+
+Admin should be able to:
+- Create staff referral codes
+- Assign code to staff/person
+- Enable/disable code
+- Set code type: staff, promoter, event, booth, influencer, flyer, Facebook ad, manual
+- Add notes
+- View total orders from each staff code
+- View total sales from each staff code
+- View pending/completed credit
+- Mark staff referral credit as paid/unpaid if payout tracking is used
+
+Staff referral dashboard should include:
+- Staff code
+- Staff name
+- Number of orders
+- Total order value
+- Completed order value
+- Pending order value
+- Last order date
+- Paid/unpaid tracking
+- Simple leaderboard
+
+Important:
+Customer referral rewards and staff referral credit are separate systems.
+A customer order may have:
+- One customer referral code
+- One staff/source referral code
+They should not overwrite each other.
+
+4. Checkout / Order Form Updates
+
+Update the customer checkout/order request form to include:
+- Customer referral code field
+- Staff/source referral code field, optional
+- Clear labels so customers understand:
+  “Referral code from a friend”
+  “Staff/event/promo code”
+
+When a code is entered:
+- Validate the code if possible
+- Show a small message if it is valid
+- Show a friendly message if invalid
+- Do not block checkout if the staff/source code is blank
+- Do not crash if a code is invalid
+
+Order records should store:
+- Customer referral code used
+- Referrer customer ID/code if matched
+- Staff/source referral code used
+- Staff/source referral record if matched
+- Points earned
+- Points redeemed
+- Referral reward status
+- Staff credit status
+
+5. Admin Order Management Updates
+
+When viewing an order in admin, show:
+- Customer reward profile link/summary
+- Points earned from this order
+- Points redeemed on this order
+- Customer referral code used
+- Referrer customer, if any
+- Staff/source referral code used
+- Staff/source attribution
+- Referral status: none, pending, approved, completed, rejected
+- Staff credit status: pending, credited, paid, rejected
+
+When an order is marked completed:
+- Award regular reward points if enabled.
+- Award first-order bonus if applicable.
+- Award customer referral bonuses if applicable.
+- Update staff referral stats if applicable.
+- Prevent duplicate reward awarding if the order is marked completed more than once.
+
+6. Admin Settings Page Updates
+
+Add or improve settings sections for:
+
+Rewards Settings:
+- Enable rewards
+- Points per dollar
+- Award points on placed order vs completed order
+- First order bonus
+- Birthday bonus
+- Double points
+- Spend threshold bonus
+- Minimum redemption amount
+- Maximum redemption per order
+- Allow rewards on merch toggle
+- Allow rewards on candy toggle
+
+Customer Referral Settings:
+- Enable customer referrals
+- Referrer bonus points
+- New customer bonus points
+- Minimum order amount
+- Award after completed order toggle
+- Allow stacking with promotions toggle
+
+Staff Referral Settings:
+- Enable staff referrals
+- Track staff order count
+- Track staff sales volume
+- Enable paid/unpaid tracking
+- Optional default commission/bonus field, but do not process real payroll
+
+7. Customer-Facing Marketing Section
+
+Add a simple customer-facing rewards/referrals marketing section.
+
+It should explain:
+- Earn points when you order
+- Share your referral code
+- Friends can use your code
+- You earn rewards when they order
+- Points may be used toward eligible candy, merch, or future offers depending on settings
+
+Add a button or area for:
+- “Ask us for your referral code”
+- “Enter referral code at checkout”
+- If customer lookup exists, show their referral code after phone lookup. If not, keep it as admin-generated for now.
+
+8. Data Model / Storage
+
+Use the existing state/storage patterns in the app.
+
+Add data structures for:
+- rewardProfiles
+- rewardTransactions
+- referralCodes
+- referralEvents
+- staffReferralCodes
+- staffReferralCredits
+
+Keep backward compatibility with existing saved data.
+Do not wipe existing products, merch, settings, orders, campaigns, or admin users.
+
+Make sure default seed data includes a couple of examples:
+- Example customer referral code
+- Example staff referral code
+- Example reward profile
+- Example reward transaction
+
+9. UI / Design
+
+Keep the Candy CrackZZZ style:
+- Bold
+- Fun
+- Candy colors
+- Mobile-friendly
+- Easy admin controls
+- Not too cluttered
+
+Admin pages should be practical and readable on iPhone.
+
+Use tabs/cards if needed:
+- Rewards
+- Customer Referrals
+- Staff Referrals
+- Referral Codes
+- Reward Profiles
+- Settings
+
+10. Testing / Acceptance Criteria
+
+After changes, verify:
+
+- App starts in Replit using bash scripts/replit-start.sh
+- API bootstrap loads
+- Customer menu still loads
+- Admin login still works
+- Products still load
+- Merch still loads
+- Orders can still be created
+- Rewards profile can be created or matched
+- Customer referral code can be entered on an order
+- Staff referral code can be entered on an order
+- Completing an order awards points once
+- Completing an order awards referral bonuses only once
+- Invalid referral code does not crash the app
+- Admin can see reward/referral/staff referral dashboards
+- Admin can edit reward/referral settings
+- File-storage fallback works without DATABASE_URL
+- pnpm run validate:replit passes
+- pnpm run typecheck passes
+- pnpm run build passes
+
+11. Do not add these yet
+
+Do not add real payment processing.
+Do not add Stripe checkout.
+Do not add Square API.
+Do not add Twilio SMS sending.
+Do not add Resend email sending.
+Do not add OpenAI API calls.
+Do not add Google Maps.
+Do not add customer password login unless absolutely necessary.
+Do not remove the existing admin protection.
+Do not break Replit deployment settings.
+
+Final deliverable:
+Update the existing Candy CrackZZZ 8.4 app with a clean rewards, customer referral, and staff referral system that is useful for marketing, easy for admin to manage, and safe to run in Replit without paid external APIs.

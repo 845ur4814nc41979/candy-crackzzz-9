@@ -1,0 +1,237 @@
+We need to debug and fix Staff Referralzzz bonus money calculation only.
+
+Do not touch Replit routing, ports, workflows, Twilio, products, checkout UI redesign, rewards redesign, app styling, or unrelated features.
+
+Current visible problem:
+On /admin/staff-referralzzz, the Staff Referralzzz page shows:
+- Signups: 1
+- Completed: 1
+- Pending: $0.00
+- Approved: $0.00
+- Paid: $0.00
+- Lifetime: $0.00
+- Bonus Queue says no pending bonuses
+
+The admin settings shown on the page are enabled:
+- Enable Staff Referralzzz Program = on
+- Allow staff referral linkzzz = on
+- Show Staff Referralzzz card on staff dashboard = on
+- Approval required before payable = on
+- Prevent self-referralzzz = on
+- Allow signup bonus = on
+- Allow first completed order bonus = on
+- Allow every completed order bonus = on
+- Fixed signup bonus = $5
+- Fixed first-order bonus = $5
+- First-order percentage = 0%
+- Every-order percentage = 10%
+- Minimum order total = $20
+- Max bonus per order = $20
+
+Expected behavior:
+If a staff referral signup exists and signup bonus is enabled, the staff member should receive a bonus record, usually pending if approval is required.
+If a referred customer completes a qualifying order and first completed order bonus is enabled, the staff member should receive a pending bonus record.
+If every completed order bonus is enabled, repeat qualifying orders should calculate a recurring staff bonus according to the percentage rule.
+The Bonus Queue should show pending or approved staff bonuses waiting for action.
+The Pending/Approved/Paid/Lifetime totals should update from staff bonus records.
+
+Do not assume the current stats are correct just because Signups and Completed show 1. Audit the full flow.
+
+Step 1 — Inspect the staff referral code paths
+
+Inspect these files first if they exist:
+
+Frontend:
+- artifacts/candy-crackzzz/src/pages/admin/AdminStaffReferralzzz.tsx
+- artifacts/candy-crackzzz/src/lib/staffReferral.ts
+- artifacts/candy-crackzzz/src/components/referrals/StaffReferralTracker.tsx
+- artifacts/candy-crackzzz/src/pages/OrderSuccessPage.tsx
+- artifacts/candy-crackzzz/src/pages/OrderSuccessRewards.tsx
+- artifacts/candy-crackzzz/src/pages/CartPage.tsx
+- artifacts/candy-crackzzz/src/context/AppContext.tsx
+- artifacts/candy-crackzzz/src/types/index.ts
+
+Backend/API/storage:
+- artifacts/api-server/src/routes/candy.ts
+- artifacts/api-server/src/routes/candy-storage.ts
+- lib/db/src/schema/candy.ts
+- any file/state storage used for orders, customers, rewards, staff referrals, or app settings
+
+Step 2 — Find exactly where staff bonus money should be created
+
+Trace these events:
+
+1. Staff referral link is generated.
+2. Customer clicks staff referral link.
+3. Staff referral code is stored.
+4. Customer signs up for Rewardzzz.
+5. Customer places an order.
+6. Order becomes completed or qualifying.
+7. Staff bonus should be calculated.
+8. Staff bonus should be saved as pending/approved/paid.
+9. Admin Staff Referralzzz page should read and total the saved bonus records.
+
+Identify where the flow stops.
+
+Likely failure points to check:
+- staff referral signup count updates, but no staff bonus transaction is created
+- completed order count updates, but no bonus transaction is created
+- order status is “placed” or “new” but code only calculates for “completed”
+- bonus queue only reads status “pending” but created records use a different status string
+- order total is missing, zero, or below minimum order total
+- staff referral code is attached to customer but not attached to order
+- staff settings field names do not match calculation field names
+- fixed signup bonus and fixed first-order bonus are not included in calculation
+- approval required is on, but no pending record is created
+- bonus totals are calculated from the wrong array/table
+- duplicate-prevention is blocking the first valid bonus by mistake
+- self-referral prevention is accidentally blocking all staff bonuses
+- staffId/staffCode does not match between link, customer, order, and admin page
+
+Step 3 — Define correct bonus calculation rules
+
+Implement these exact rules:
+
+A. Signup bonus:
+If:
+- staff referral program enabled
+- allow signup bonus enabled
+- customer signed up through a valid active staff code
+- no signup bonus was already issued for that referred customer/staff code
+
+Then:
+- create a staff bonus record
+- bonus type = signup
+- amount = fixed signup bonus
+- status = pending if approval required, otherwise approved
+- attach staffId/staffCode/referredCustomerId
+- show it in Bonus Queue if pending or approved
+- include it in Pending/Approved/Lifetime totals
+
+B. First completed order bonus:
+If:
+- staff referral program enabled
+- allow first completed order bonus enabled
+- referred customer has a valid staff referral code
+- order is completed or treated as completed by this app’s order flow
+- order total is at or above minimum order total
+- no first-order staff bonus was already issued for that referred customer/order
+
+Then calculate:
+- fixed first-order bonus
+plus
+- first-order percentage bonus if percentage is greater than 0
+
+Apply max bonus per order cap if set.
+
+Create a staff bonus record:
+- type = first_order
+- status = pending if approval required, otherwise approved
+- attach orderId/orderTotal/staffId/staffCode/referredCustomerId
+- show in Bonus Queue
+- include in totals
+
+C. Every completed order bonus:
+If:
+- allow every completed order bonus enabled
+- customer came from staff referral
+- order qualifies
+- bonus for this specific order has not already been issued
+
+Then calculate:
+- every-order percentage of order total
+- apply minimum order and max bonus cap
+- create pending/approved bonus record
+
+D. Duplicate protection:
+Never award the same staff bonus twice for:
+- same staffId
+- same referredCustomerId
+- same orderId
+- same bonus type
+
+But do not let duplicate protection block the first valid bonus.
+
+Step 4 — Fix the admin totals and queue
+
+AdminStaffReferralzzz should calculate:
+
+Pending = sum of bonus records with status pending
+Approved = sum of bonus records with status approved
+Paid = sum of bonus records with status paid
+Lifetime = pending + approved + paid, or all non-denied bonuses depending on current design
+
+Bonus Queue should show:
+- pending bonuses
+- approved bonuses waiting to be paid
+- staff name/code
+- referred customer
+- order number if available
+- bonus type
+- bonus amount
+- status
+- buttons/actions for approve, deny, mark paid if those actions exist
+
+If Signups and Completed count are separate from money records, keep them, but make sure money records are created and displayed.
+
+Step 5 — Add safe repair/backfill for existing data
+
+Since the page already shows Signups: 1 and Completed: 1 but $0, add a safe function or admin-side repair step that can backfill missing staff bonus records from existing referral/order data.
+
+Requirements:
+- Do not duplicate bonuses.
+- Only create missing bonuses when a valid staff referral and qualifying signup/order exists.
+- Log/report how many missing bonuses were created.
+- If automatic backfill is risky, add an admin button such as “Recalculate Staff Bonuszzz” that runs the repair.
+
+Step 6 — Test with current data
+
+Use the existing visible case:
+- Signups should remain 1
+- Completed should remain 1
+- If signup bonus is enabled at $5, pending should include at least $5 unless duplicate already paid/approved
+- If completed order qualifies and first-order bonus is enabled at $5, pending should include that too
+- If order total qualifies for every-order 10%, include that bonus if the rule says every completed order applies
+- Bonus Queue should no longer be empty if there are pending/approved bonuses
+
+If the existing completed order does not qualify because order total is below $20 or missing, clearly explain that and make the UI show why no bonus was calculated.
+
+Step 7 — Add debug/admin visibility
+
+Add helpful admin-only visibility on Staff Referralzzz page:
+- show why a signup/order did or did not create a bonus
+- show minimum order rule
+- show order total used for calculation
+- show duplicate prevention result
+- show missing staff code warning if relevant
+
+Do not expose private debug details to customers.
+
+Step 8 — Build and test
+
+Run:
+
+pnpm --filter @workspace/candy-crackzzz run build
+pnpm --filter @workspace/api-server run build
+pnpm --filter @workspace/candy-crackzzz run typecheck
+
+Also test manually:
+1. Create or use a staff referral link.
+2. Sign up a customer using that staff link.
+3. Place a qualifying order above $20.
+4. Confirm staff bonus record appears.
+5. Confirm Pending total updates.
+6. Approve bonus.
+7. Confirm Approved total updates.
+8. Mark paid.
+9. Confirm Paid and Lifetime update.
+10. Confirm same order does not duplicate bonus.
+
+Final report:
+1. Exact bug found
+2. Why Signups/Completed showed 1 but money stayed $0
+3. Files changed
+4. Bonus calculation rules implemented
+5. Existing data repair/backfill behavior
+6. Tests run
+7. Any remaining limitations

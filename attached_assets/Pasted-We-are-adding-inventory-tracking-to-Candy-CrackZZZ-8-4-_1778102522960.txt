@@ -1,0 +1,337 @@
+We are adding inventory tracking to Candy CrackZZZ 8.4.
+
+Do not change Replit startup, workflows, ports, artifact configs, OpenAI, Twilio, Google Maps, payment setup, routing, or unrelated UI.
+
+Focus only on inventory tracking for ingredients, packaging, containers, cups, lids, bags, labels, trays, sticks/skewers, cleaning/food prep supplies, and other items needed to keep on hand.
+
+Goal:
+Create an inventory system so admin can track what supplies are on hand, set low-stock alerts, connect inventory items to menu products, and automatically deduct inventory when orders are placed or completed.
+
+Main concept:
+Each sellable product should have a “recipe” or “inventory usage list.” When that product is ordered, the system subtracts the required ingredients and packaging from inventory.
+
+Example:
+If a customer orders 1 tray of candy grapes, the app may subtract:
+- grapes
+- sugar/candy mix
+- flavoring
+- food coloring
+- tray container
+- lid
+- label/sticker
+- bag
+- fork/pick/skewer if included
+
+If a customer orders a dirty soda, the app may subtract:
+- cup size
+- lid
+- straw
+- soda
+- syrup/flavor
+- creamer
+- candy topping
+
+Inventory categories:
+- Ingredients
+- Candy/coating supplies
+- Fruit
+- Toppings
+- Drinks/soda supplies
+- Donutzzz supplies
+- Containers
+- Cups
+- Lids
+- Bags
+- Labels/stickers
+- Utensils/straws/picks
+- Cleaning/prep supplies
+- Miscellaneous
+
+Part 1 — Audit current code first
+
+Inspect existing files before changing anything:
+
+Frontend:
+- artifacts/candy-crackzzz/src/pages/admin/AdminProducts.tsx
+- artifacts/candy-crackzzz/src/pages/admin/AdminProductForm.tsx
+- artifacts/candy-crackzzz/src/pages/admin/AdminOrders.tsx
+- artifacts/candy-crackzzz/src/pages/admin/AdminSettings.tsx
+- artifacts/candy-crackzzz/src/context/AppContext.tsx
+- artifacts/candy-crackzzz/src/types/index.ts
+
+Backend/storage:
+- artifacts/api-server/src/routes/candy.ts
+- artifacts/api-server/src/routes/candy-storage.ts
+- lib/db/src/schema/candy.ts
+- any existing app state/storage files
+
+Report what currently exists:
+1. Is there any inventory tracking already?
+2. Is product/order data backend persisted or local/file storage?
+3. Where should inventory data be stored?
+4. Where should inventory deduction happen?
+
+Part 2 — Inventory item model
+
+Add inventory items with these fields:
+
+- id
+- name
+- category
+- unit type, such as each, oz, lb, gram, gallon, bottle, case, box, sleeve, pack
+- current quantity on hand
+- low stock threshold
+- reorder quantity
+- supplier/vendor optional
+- supplier link optional
+- cost per unit optional
+- notes optional
+- active/inactive
+- last updated date
+
+Examples:
+- 16 oz clear cup, unit each, current 100, low stock 25
+- 24 oz clear cup, unit each, current 80, low stock 20
+- clear dome lid, unit each, current 50, low stock 20
+- grapes, unit lb, current 20, low stock 5
+- blue raspberry flavor, unit oz, current 32, low stock 8
+- sugar, unit lb, current 25, low stock 10
+- tray container, unit each, current 40, low stock 10
+
+Part 3 — Product recipe / inventory usage
+
+Each product should allow admin to assign inventory usage.
+
+On product edit/admin product form, add an “Inventory Usage” section.
+
+For each product, admin can add multiple inventory items used per 1 quantity sold.
+
+Fields:
+- inventory item
+- quantity used per product
+- unit
+- optional note
+- required/optional
+- deduction timing: on order placed, on order completed, or manual
+
+Example:
+Product: Blue Raspberry Grapes
+Inventory usage:
+- grapes: 0.5 lb
+- blue raspberry flavoring: 0.25 oz
+- sugar/candy mix: 0.5 lb
+- clear container: 1 each
+- lid: 1 each
+- label: 1 each
+
+Example:
+Product: Dirty Soda 24 oz
+Inventory usage:
+- 24 oz cup: 1 each
+- lid: 1 each
+- straw: 1 each
+- soda: 24 oz
+- syrup: 1 oz
+- creamer: 1 oz
+
+Part 4 — Container size selection
+
+For each product, allow admin to select the default container/packaging size from inventory.
+
+Examples:
+- 8 oz container
+- 12 oz container
+- 16 oz cup
+- 24 oz cup
+- small tray
+- large tray
+- dozen box
+- bag
+
+This selected container should be deducted automatically when the item is ordered.
+
+If the customer can choose size/options, deduct inventory based on the selected option.
+
+Part 5 — Inventory deduction rules
+
+Implement deduction logic:
+
+When an order is placed or marked complete:
+1. Read the products and quantities in the order.
+2. For each product, read its inventory usage list.
+3. Multiply inventory usage by order quantity.
+4. Subtract from current inventory.
+5. Create an inventory transaction record.
+6. Prevent duplicate deductions for the same order.
+7. Show warning if inventory would go negative.
+8. Allow admin override if needed.
+
+Inventory transaction types:
+- order_deduction
+- manual_adjustment
+- restock
+- waste/spoilage
+- correction
+- return/cancel reversal
+
+Each transaction should record:
+- id
+- inventoryItemId
+- orderId optional
+- productId optional
+- transaction type
+- quantity change positive or negative
+- previous quantity
+- new quantity
+- reason/note
+- createdAt
+- createdBy/admin optional
+
+Important:
+Do not deduct twice if the same order is refreshed, edited, or marked complete twice.
+
+Part 6 — Low stock alerts
+
+Add admin low-stock warnings.
+
+Admin should see:
+- low stock items
+- out of stock items
+- estimated reorder quantity
+- supplier/vendor if listed
+- “mark reordered” or “add restock” action
+
+Low stock should trigger when:
+current quantity <= low stock threshold
+
+Out of stock should trigger when:
+current quantity <= 0
+
+Add badges:
+- In Stock
+- Low Stock
+- Out of Stock
+- Inactive
+
+Part 7 — Admin inventory page
+
+Create or update an admin page:
+
+/admin/inventory
+
+Features:
+- inventory dashboard summary
+- total inventory items
+- low stock count
+- out of stock count
+- estimated inventory value if costs exist
+- searchable inventory list
+- filter by category/status
+- add inventory item
+- edit inventory item
+- restock item
+- manual adjustment
+- view transaction history
+- view items connected to products
+
+Add nav link in admin layout/sidebar if appropriate.
+
+Part 8 — Product page/admin integration
+
+In Admin Products/Product Form:
+- show whether product has inventory usage configured
+- show missing inventory usage warning
+- allow editing usage list
+- allow selecting container size/item
+- show estimated cost per product if cost data exists
+- warn if product uses inactive/out-of-stock inventory
+
+Part 9 — Orders integration
+
+In Admin Orders:
+- show inventory deduction status per order:
+  - not deducted
+  - deducted
+  - partially deducted
+  - deduction failed/warnings
+- add button if needed:
+  - Deduct inventory
+  - Reverse deduction
+- show warnings if order contains products with missing inventory recipe
+
+If an order is cancelled:
+- optionally reverse inventory deduction if it was already deducted
+- ask admin or use safe default
+
+Part 10 — Settings
+
+Add inventory settings:
+- enable inventory tracking
+- deduction timing: order placed, order completed, manual
+- allow negative inventory yes/no
+- show low stock alerts on dashboard yes/no
+- default low stock threshold optional
+- default deduction behavior for orders without recipe
+
+Part 11 — Safety and edge cases
+
+Handle:
+- products with no inventory usage yet
+- deleted/inactive inventory item used by a product
+- order edited after inventory was deducted
+- order cancelled after inventory was deducted
+- quantity would go negative
+- decimal quantities like pounds/ounces
+- packaging item used by multiple products
+- size/options changing which cup/container is deducted
+- existing orders created before inventory system exists
+- file storage fallback if DB is not configured
+- missing settings/defaults
+
+Part 12 — Testing
+
+Test:
+1. Add inventory item: 16 oz cup.
+2. Add inventory item: lid.
+3. Add inventory item: grapes.
+4. Attach those items to a product recipe.
+5. Place an order for quantity 2.
+6. Confirm inventory deducts double the recipe amount.
+7. Confirm transaction records are created.
+8. Confirm same order does not deduct twice.
+9. Restock inventory and confirm quantity increases.
+10. Manual adjustment works with reason.
+11. Low stock warning appears.
+12. Out-of-stock warning appears.
+13. Product with no recipe does not crash order flow.
+14. Build passes.
+15. Typecheck passes.
+
+Run:
+pnpm --filter @workspace/candy-crackzzz run build
+pnpm --filter @workspace/api-server run build
+pnpm --filter @workspace/candy-crackzzz run typecheck
+
+Part 13 — Final report
+
+Before coding, give a short audit:
+- where inventory will be stored
+- which files will change
+- how deduction will be triggered
+
+After coding, give final report:
+1. Files changed
+2. Inventory item model added
+3. Product recipe/usage system added
+4. Container size deduction added
+5. Order deduction behavior
+6. Low stock alerts
+7. Admin inventory page
+8. Settings added
+9. Transaction history
+10. Edge cases handled
+11. Tests run
+12. Remaining limitations
+
+Do not touch startup/routing.
+Do not offer unrelated features at the end.

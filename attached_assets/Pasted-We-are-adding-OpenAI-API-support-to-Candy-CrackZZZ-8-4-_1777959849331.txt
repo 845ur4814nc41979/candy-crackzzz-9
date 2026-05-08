@@ -1,0 +1,181 @@
+We are adding OpenAI API support to Candy CrackZZZ 8.4.
+
+Do not change Replit startup, workflows, ports, artifact configs, Twilio, Google Maps, payment settings, products data, checkout logic, rewardzzz logic, referralzzz logic, or unrelated UI.
+
+Use Replit Secrets only.
+Do not hardcode the OpenAI API key.
+Do not expose the OpenAI API key to frontend code.
+Do not print the OpenAI API key.
+Do not commit secrets.
+
+Secret name:
+OPENAI_API_KEY
+
+Goal:
+Add backend-only OpenAI support for AI-assisted Candy CrackZZZ admin tools.
+
+Use cases:
+1. Generate catchy product descriptionzzz from product name, flavor, category, and optional notes.
+2. Suggest alternate product namezzz.
+3. Generate rewardzzz/referralzzz message text.
+4. Generate promo/campaign text.
+5. Optional later: AI helper for admin/customer support text.
+
+Use the OpenAI Responses API for new work.
+
+Step 1 — Inspect existing AI/smart description code
+
+Check these files first if they exist:
+- artifacts/candy-crackzzz/src/components/admin/SmartDescriptionButton.tsx
+- artifacts/candy-crackzzz/src/lib/smartDescription.ts
+- artifacts/candy-crackzzz/src/pages/admin/AdminProductForm.tsx
+- artifacts/candy-crackzzz/src/pages/admin/AdminProducts.tsx
+- artifacts/candy-crackzzz/src/pages/admin/AdminCampaigns.tsx
+- artifacts/api-server/src/routes/candy.ts
+- artifacts/api-server/src/routes/index.ts
+- artifacts/api-server/package.json
+
+Report what currently exists:
+- Is AI currently fake/local only?
+- Is there already a smart description button?
+- Is there already an API route?
+- Is the OpenAI SDK installed?
+- What should be reused?
+
+Step 2 — Add OpenAI backend service
+
+Create a backend-only service, for example:
+
+artifacts/api-server/src/lib/openai.ts
+
+Requirements:
+- Read process.env.OPENAI_API_KEY.
+- If missing, return a safe error and do not crash.
+- Use the official openai npm package if already installed. If not installed, add it only to the API server package.
+- Use the Responses API.
+- Use a configurable model with default:
+  gpt-5-mini
+  or use an existing low-cost model setting if the repo already has one.
+- Keep prompts short and cost-conscious.
+- Do not send unnecessary customer PII.
+- Add helpful logging without printing the API key.
+
+Step 3 — Add backend endpoints
+
+Add endpoints under /api/cc/ai or similar:
+
+POST /api/cc/ai/product-description
+
+Body:
+{
+  "productName": "Blue Raspberry Grapes",
+  "category": "candy dipped fruit",
+  "flavors": ["blue raspberry", "sweet", "crunchy"],
+  "notes": "optional admin notes",
+  "tone": "fun but not too cheesy"
+}
+
+Response:
+{
+  "ok": true,
+  "description": "...",
+  "suggestedNames": ["...", "...", "..."]
+}
+
+POST /api/cc/ai/promo-message
+
+Body:
+{
+  "campaignType": "rewardzzz",
+  "audience": "customers",
+  "offer": "double rewardzzz points this weekend",
+  "channel": "sms"
+}
+
+Response:
+{
+  "ok": true,
+  "message": "..."
+}
+
+POST /api/cc/ai/referral-message
+
+Body:
+{
+  "type": "customer_referralzzz" or "staff_referralzzz",
+  "context": "short description"
+}
+
+Response:
+{
+  "ok": true,
+  "message": "..."
+}
+
+Safety:
+- For SMS messages, keep responses short.
+- Do not generate medical, illegal, THC/cannabis, alcohol, or age-restricted marketing text unless the admin explicitly configures a compliant age-gated campaign later.
+- Do not include fake discount terms that were not provided.
+- Do not invent prices.
+- Do not invent availability.
+- Return a clear error if the prompt is missing required info.
+
+Step 4 — Frontend admin integration
+
+Connect existing SmartDescriptionButton or add minimal admin buttons:
+
+Product form:
+- Button: Generate description
+- Button: Suggest namezzz
+- Show generated result in a preview area.
+- Let admin choose whether to apply the generated text.
+- Do not auto-overwrite product data without confirmation.
+
+Campaigns/rewardzzz/referralzzz message areas:
+- Button: Generate message idea
+- Show result.
+- Let admin copy/apply manually.
+
+If OPENAI_API_KEY is missing:
+- UI should show “AI tools are not configured yet” or a clear admin-only message.
+- App must not crash.
+
+Step 5 — Admin settings note
+
+Add a small setup note in admin settings or documentation:
+- Add OPENAI_API_KEY to Replit Secrets.
+- Restart the backend after adding the secret.
+- AI tools are optional.
+- Generated copy should be reviewed before publishing/sending.
+
+Step 6 — Testing
+
+Run:
+
+pnpm --filter @workspace/api-server run build
+pnpm --filter @workspace/candy-crackzzz run build
+pnpm --filter @workspace/candy-crackzzz run typecheck
+
+Manual tests:
+1. With OPENAI_API_KEY missing:
+   - API returns safe error.
+   - frontend shows clear message.
+   - app does not crash.
+2. With OPENAI_API_KEY set:
+   - product description generation works.
+   - suggested namezzz return.
+   - promo message generation works.
+   - generated text can be applied or copied manually.
+3. Confirm key is never exposed in browser source/network response.
+
+Step 7 — Final report
+
+Report:
+1. Files changed
+2. Secret name used
+3. Whether OpenAI SDK was added
+4. Endpoints added
+5. Admin buttons added/connected
+6. What happens if OPENAI_API_KEY is missing
+7. Tests run
+8. Any limitations

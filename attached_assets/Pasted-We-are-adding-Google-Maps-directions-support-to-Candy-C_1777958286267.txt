@@ -1,0 +1,154 @@
+We are adding Google Maps directions support to Candy CrackZZZ 8.4.
+
+Do not change Replit startup, ports, workflows, artifact configs, products, checkout, rewardzzz, referralzzz, staff referralzzz, Twilio, Resend, payments, or unrelated UI.
+
+Important:
+Use Replit Secrets only. Do not hardcode the Google API key. Do not print the key. Do not expose the key in frontend code unless we intentionally decide to use a browser-restricted public Maps key later.
+
+Goal:
+Add Google directions support for delivery/admin use so the app can generate directions, distance, drive time, and a Google Maps link for customer delivery addresses.
+
+Secrets:
+Use this secret name:
+GOOGLE_MAPS_API_KEY
+
+Optional future names if needed:
+GOOGLE_DIRECTIONS_API_KEY
+GOOGLE_ROUTES_API_KEY
+
+Prefer reading GOOGLE_MAPS_API_KEY first.
+
+Step 1 — Inspect current directions/location code
+
+Inspect these files/areas if they exist:
+- artifacts/candy-crackzzz/src/lib/directions.ts
+- artifacts/candy-crackzzz/src/pages/admin/AdminDeliveries.tsx
+- artifacts/candy-crackzzz/src/pages/admin/AdminOrders.tsx
+- artifacts/candy-crackzzz/src/pages/CartPage.tsx
+- artifacts/candy-crackzzz/src/pages/OrderSuccessPage.tsx
+- artifacts/api-server/src/routes/candy.ts
+- artifacts/api-server/src/routes/candy-storage.ts
+- artifacts/api-server/src/routes/index.ts
+
+Report:
+1. What directions code exists now?
+2. Is it only opening Google Maps URLs?
+3. Does it currently calculate ETA/distance?
+4. Does it use any API key already?
+5. What is the safest place to add the server-side route?
+
+Step 2 — Add backend-only Google directions endpoint
+
+Add a backend API endpoint so the key stays server-side.
+
+Create or update an endpoint like:
+
+GET /api/cc/directions?origin=...&destination=...
+
+or preferably:
+
+POST /api/cc/directions
+
+Body:
+{
+  "origin": "business/store address",
+  "destination": "customer delivery address"
+}
+
+Behavior:
+- Read GOOGLE_MAPS_API_KEY from process.env.
+- If key is missing, return a clear JSON error and do not crash.
+- Validate origin and destination are provided.
+- Call Google Directions API or Routes API from the backend only.
+- Return normalized JSON:
+  {
+    "ok": true,
+    "distanceText": "...",
+    "distanceMeters": 12345,
+    "durationText": "...",
+    "durationSeconds": 1234,
+    "mapsUrl": "https://www.google.com/maps/dir/?api=1&origin=...&destination=...",
+    "provider": "google"
+  }
+
+If Google returns an error, return:
+{
+  "ok": false,
+  "error": "clear safe error message"
+}
+
+Do not return the API key to the frontend.
+
+Step 3 — Google Maps link fallback
+
+Even if the API key is missing or the API request fails, the app should still be able to create a clickable Google Maps directions link:
+
+https://www.google.com/maps/dir/?api=1&origin=ENCODED_ORIGIN&destination=ENCODED_DESTINATION
+
+This fallback does not need the API key.
+
+Step 4 — Admin delivery UI integration
+
+In Admin Deliveries or Admin Orders, add/verify a directions section for each delivery order:
+
+- customer address
+- button: Open in Google Maps
+- button: Calculate drive time
+- show distance
+- show estimated drive time
+- show error if API key missing
+- never show the API key
+
+Use existing styling/components. Do not redesign the admin.
+
+Step 5 — Store/business origin address
+
+Use existing business/store address from app settings if available.
+
+If no store address exists, add a simple admin setting field:
+Business pickup/delivery origin address
+
+This should be used as the default origin for directions.
+
+Do not hardcode my personal address.
+
+Step 6 — Security and key restrictions documentation
+
+Update the relevant setup doc or create a short note in REPLIT_IMPORT_FIX.md or a new GOOGLE_MAPS_SETUP.md:
+
+Include:
+- Add GOOGLE_MAPS_API_KEY to Replit Secrets.
+- Enable the correct Google Maps Platform API in Google Cloud.
+- If using backend web service calls, restrict the key to the Directions API or Routes API.
+- If restricting by application, server-side calls generally use IP restrictions, but Replit IPs may change, so API restrictions are the most important first step.
+- Do not expose the backend key to frontend code.
+
+Step 7 — Test
+
+Run:
+pnpm --filter @workspace/api-server run build
+pnpm --filter @workspace/candy-crackzzz run build
+pnpm --filter @workspace/candy-crackzzz run typecheck
+
+Manual tests:
+1. With GOOGLE_MAPS_API_KEY missing:
+   - endpoint returns safe error
+   - Google Maps link fallback still works
+   - app does not crash
+
+2. With GOOGLE_MAPS_API_KEY set:
+   - endpoint returns distance and duration
+   - admin delivery/order page shows ETA and distance
+   - Open in Google Maps button works
+
+Step 8 — Final report
+
+Report:
+1. Files changed
+2. Endpoint added
+3. Secret name used
+4. Whether Directions API or Routes API was used
+5. How to add the key in Replit Secrets
+6. How to restrict the key in Google Cloud
+7. What happens if the key is missing
+8. Tests run

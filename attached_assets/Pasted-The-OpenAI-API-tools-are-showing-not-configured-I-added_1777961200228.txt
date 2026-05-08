@@ -1,0 +1,123 @@
+The OpenAI API tools are showing “not configured.” I added or am trying to add the OpenAI key through Replit Secrets, but the shell check did not show OPENAI_API_KEY.
+
+Do not add new app features.
+Do not change Replit ports, workflows, artifact configs, products, checkout, rewards, referralzzz, Twilio, Google Maps, or UI.
+Only diagnose and fix the OpenAI secret/config loading.
+
+Goal:
+Make the backend API server read OPENAI_API_KEY from Replit Secrets and make the admin AI tools stop showing “API tools not configured.”
+
+Required secret name:
+OPENAI_API_KEY
+
+Important:
+Do not print the secret value.
+Do not echo the secret.
+Do not write the secret to any file.
+Do not commit the secret.
+Only confirm whether it is set using masked output.
+
+Step 1 — Check whether the secret is visible
+
+Run:
+
+cd /home/runner/workspace
+
+echo "=== Check OpenAI secret visibility ==="
+if [ -n "${OPENAI_API_KEY:-}" ]; then
+  echo "OPENAI_API_KEY=<set>"
+else
+  echo "OPENAI_API_KEY=<missing>"
+fi
+
+Also check all likely OpenAI-related env names without printing values:
+
+printenv | grep -Ei "OPENAI|AI_|API_KEY" | sed 's/=.*/=<set>/'
+
+Step 2 — If OPENAI_API_KEY is missing
+
+Stop and tell me clearly:
+“OPENAI_API_KEY is missing from this workflow environment. Add it in Replit Secrets exactly as OPENAI_API_KEY, then restart the API workflow.”
+
+Do not make code changes if the only problem is the missing secret.
+
+Step 3 — If OPENAI_API_KEY is set
+
+Inspect the backend OpenAI integration:
+
+Check:
+- artifacts/api-server/src/lib/openai.ts
+- artifacts/api-server/src/routes
+- any /api/cc/ai routes
+- artifacts/api-server/package.json
+- frontend admin AI components/buttons that show the warning
+
+Find:
+1. What file checks for OPENAI_API_KEY?
+2. What route returns “API tools not configured”?
+3. Is the API server reading process.env.OPENAI_API_KEY?
+4. Does the frontend call the correct backend route?
+5. Is the API workflow restarted after the secret was added?
+
+Step 4 — Restart the correct workflows
+
+After confirming OPENAI_API_KEY is set, restart only:
+
+- artifacts/api-server: API Server
+- artifacts/candy-crackzzz: web, only if frontend still shows stale warning
+
+Do not change Start application unless the embedded preview itself is broken.
+
+Remember:
+Start application = proxy only
+artifacts/candy-crackzzz: web = Vite frontend on 5001
+artifacts/api-server: API Server = API on 3001
+
+Do not edit scripts/replit-start.sh for this issue.
+
+Step 5 — Test backend AI config
+
+Run or create a safe test against the AI route without printing the key.
+
+If an AI test endpoint exists, call it.
+
+If no AI test endpoint exists, use the existing product description or AI route with a small safe payload, for example:
+
+curl -s -X POST http://127.0.0.1:3001/api/cc/ai/product-description \
+  -H "Content-Type: application/json" \
+  -d '{"productName":"Blue Raspberry Grapes","category":"candy dipped fruit","flavors":["blue raspberry"],"tone":"fun but not too cheesy"}' | head -c 1000
+
+Expected:
+- If OPENAI_API_KEY is missing: clear safe configuration error
+- If OPENAI_API_KEY is set: AI response or a clear OpenAI API error
+- The API should not crash
+
+Step 6 — If secret is set but app still says not configured
+
+Fix only the config-loading bug.
+
+Possible issues to check:
+- code is looking for OPENAI_KEY instead of OPENAI_API_KEY
+- frontend is checking import.meta.env instead of backend config
+- API route is checking the wrong env name
+- API server was not restarted after secret was added
+- AI availability endpoint is cached
+- admin UI is not refreshing after config check
+
+Use OPENAI_API_KEY as the primary secret name.
+
+Do not expose the key to the frontend.
+
+Step 7 — Final report
+
+Report:
+1. Whether OPENAI_API_KEY is visible to the API workflow
+2. Which file checks the secret
+3. Which endpoint powers the AI tools
+4. Whether the API server was restarted
+5. Whether the AI tools now detect configuration
+6. Any code changes made
+7. Tests run
+
+Do not print the key.
+Do not add unrelated features.

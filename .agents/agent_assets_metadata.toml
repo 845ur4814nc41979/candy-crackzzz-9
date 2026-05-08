@@ -1,0 +1,56 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "yTvZiIWMTAFgcsNuDtGxx"
+uri = "file://artifacts/candy-crackzzz/public/images/rainbow-grapes.png"
+type = "image"
+title = "Rainbow Candy Grapes"
+
+[[generated]]
+id = "hHb8Hc4Z74Hzj0IUbhx5G"
+uri = "file://artifacts/candy-crackzzz/public/images/blue-grapes.png"
+type = "image"
+title = "Blue Raspberry Grapes"
+
+[[generated]]
+id = "b6phDjEmtyWf3xoZELut_"
+uri = "file://artifacts/candy-crackzzz/public/images/pink-grapes.png"
+type = "image"
+title = "Pink Lemonade Grapes"
+
+[[generated]]
+id = "x6WWboNPfA7HjJoP0s9Nm"
+uri = "file://artifacts/candy-crackzzz/public/images/tropical-pineapple.png"
+type = "image"
+title = "Tropical Pineapple Chunks"
+
+[[generated]]
+id = "EBdav2bLb0S7q8boKAUkj"
+uri = "file://artifacts/candy-crackzzz/public/images/mango-pineapple.png"
+type = "image"
+title = "Mango Habanero Pineapple"
+
+[[generated]]
+id = "UsOMXWCA3ORo05wdnwRM-"
+uri = "file://artifacts/candy-crackzzz/public/images/rainbow-tray.png"
+type = "image"
+title = "Rainbow Party Tray"
+
+[[generated]]
+id = "GL2VrYb3Y05TQzrvLRpsX"
+uri = "file://artifacts/candy-crackzzz/public/images/deluxe-tray.png"
+type = "image"
+title = "Deluxe Celebration Tray"
+
+[[generated]]
+id = "-vHtkXhZ929fdQtr0diC-"
+uri = "file://artifacts/candy-crackzzz/public/images/valentine-grapes.png"
+type = "image"
+title = "Valentine Special Grapes"
+
+[[generated]]
+id = "qD3RWZIyZQ0r_XRhzCueA"
+uri = "file://artifacts/candy-crackzzz/public/images/birthday-tray.png"
+type = "image"
+title = "Birthday Bash Tray"

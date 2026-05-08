@@ -1,0 +1,142 @@
+We are adding Google directions support to Candy CrackZZZ 8.4, and I want it to use live device location when available.
+
+Do not change Replit startup, workflows, ports, artifact configs, rewardzzz, referralzzz, products, checkout logic, Twilio, Resend, payments, or unrelated UI.
+
+Goal:
+Directions should support current GPS location, not only typed addresses.
+
+Use cases:
+1. Admin/delivery driver can tap “Use my current location” to get directions from their current location to the customer delivery address.
+2. Admin/delivery driver can also fall back to the business/store address if location permission is denied.
+3. Customer can optionally open directions to pickup location from their current location if we add pickup directions later.
+
+Important security:
+- Use browser Geolocation API for current device location.
+- Ask permission only when the user taps the button.
+- Do not track location in the background.
+- Do not store live location unless needed for a single request.
+- Do not expose Google API key in frontend code.
+- Use Replit Secret GOOGLE_MAPS_API_KEY on the backend only.
+
+Frontend behavior:
+On Admin Deliveries and/or Admin Orders delivery area, add buttons:
+
+- Open in Google Maps
+- Use My Current Location
+- Calculate Drive Time
+
+When “Use My Current Location” is clicked:
+1. Call navigator.geolocation.getCurrentPosition().
+2. If permission is granted, use latitude/longitude as origin:
+   origin = "lat,lng"
+3. Destination should be the customer delivery address.
+4. Call backend directions endpoint with origin and destination.
+5. Show:
+   - distance
+   - estimated drive time
+   - Google Maps directions link
+6. If permission is denied or unavailable:
+   - show friendly message
+   - use business/store address as fallback origin if available
+   - still show Open in Google Maps link if possible
+
+Backend behavior:
+Add or update backend endpoint:
+
+POST /api/cc/directions
+
+Request body:
+{
+  "origin": "28.12345,-82.12345",
+  "destination": "customer address",
+  "mode": "driving"
+}
+
+Also allow:
+{
+  "originAddress": "business address",
+  "destination": "customer address"
+}
+
+The backend should:
+- read GOOGLE_MAPS_API_KEY from process.env
+- validate destination
+- validate origin or originAddress
+- call Google Directions API or Routes API server-side
+- return normalized response:
+{
+  "ok": true,
+  "distanceText": "12.4 mi",
+  "distanceMeters": 19955,
+  "durationText": "24 mins",
+  "durationSeconds": 1440,
+  "originUsed": "current_location" or "business_address",
+  "mapsUrl": "https://www.google.com/maps/dir/?api=1&origin=...&destination=...",
+  "provider": "google"
+}
+
+If key is missing:
+- do not crash
+- return ok:false with a safe message
+- still return mapsUrl fallback if origin and destination are available
+
+Google Maps URL fallback:
+Use:
+https://www.google.com/maps/dir/?api=1&origin=ENCODED_ORIGIN&destination=ENCODED_DESTINATION&travelmode=driving
+
+If current location is available, origin can be:
+lat,lng
+
+Example:
+https://www.google.com/maps/dir/?api=1&origin=28.476,-82.525&destination=123%20Main%20St%20Tampa%20FL&travelmode=driving
+
+Admin settings:
+If not already present, add a setting for:
+Business pickup/delivery origin address
+
+Do not hardcode the business address.
+
+UI requirements:
+- Keep it simple.
+- Do not redesign the page.
+- Show location permission errors clearly.
+- Show loading while calculating.
+- Never show the Google API key.
+- If the user is on mobile, the Google Maps link should open the Maps app if available.
+
+Privacy note:
+Add small text near the button:
+“Your location is only used to calculate directions after you tap the button.”
+
+Files to inspect:
+- artifacts/candy-crackzzz/src/lib/directions.ts
+- artifacts/candy-crackzzz/src/pages/admin/AdminDeliveries.tsx
+- artifacts/candy-crackzzz/src/pages/admin/AdminOrders.tsx
+- artifacts/candy-crackzzz/src/context/AppContext.tsx
+- artifacts/candy-crackzzz/src/types/index.ts
+- artifacts/api-server/src/routes/candy.ts
+- artifacts/api-server/src/routes/index.ts
+
+Testing:
+Run:
+pnpm --filter @workspace/api-server run build
+pnpm --filter @workspace/candy-crackzzz run build
+pnpm --filter @workspace/candy-crackzzz run typecheck
+
+Manual tests:
+1. Click Use My Current Location and allow permission.
+2. Confirm origin is lat,lng.
+3. Confirm directions link opens Google Maps.
+4. Confirm ETA/distance appears if GOOGLE_MAPS_API_KEY is configured.
+5. Deny location permission.
+6. Confirm app falls back to business address or shows a clear message.
+7. Remove/miss GOOGLE_MAPS_API_KEY.
+8. Confirm app does not crash and still creates a Google Maps link.
+
+Final report:
+1. Files changed
+2. Secret used
+3. How current location is requested
+4. What happens if permission is denied
+5. What happens if Google key is missing
+6. How to test on mobile
