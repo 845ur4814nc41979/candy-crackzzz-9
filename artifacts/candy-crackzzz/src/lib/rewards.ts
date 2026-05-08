@@ -1,4 +1,4 @@
-import type { OrderRequest, RewardProfile, Settings } from '@/types';
+import type { OrderRequest, ReferralCode, ReferralEvent, RewardProfile, RewardTransaction, Settings } from '@/types';
 
 function createShortId(prefix: string) {
   return `${prefix}-${(globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)).slice(0, 8).toUpperCase()}`;
@@ -63,6 +63,10 @@ export function awardCompletedOrderRewards(params: {
     lifetimeReferralPointsEarned: profile.lifetimeReferralPointsEarned ?? 0,
   }));
 
+  const newRewardTransactions: RewardTransaction[] = [];
+  let newReferralEvent: ReferralEvent | null = null;
+  let newReferralCodeEntry: ReferralCode | null = null;
+
   // Finalize a pending redemption attached at checkout: deduct the points and
   // log a "redeemed" history entry. Runs whether or not rewards are enabled
   // now, because the redemption was already recorded against the customer.
@@ -79,6 +83,18 @@ export function awardCompletedOrderRewards(params: {
         const deduct = Math.min(pendingRedemption, profile.currentPoints);
         if (deduct <= 0) return profile;
         redemptionFinalized = true;
+        newRewardTransactions.push({
+          id: createShortId('RWT'),
+          profileId: profile.id,
+          profilePhone: profile.phone,
+          profileName: profile.customerName,
+          type: 'redeemed',
+          points: -deduct,
+          orderId: order.id,
+          note: `Reward redeemed at checkout ($${(Number(order.rewardsDiscountAmount) || 0).toFixed(2)} off).`,
+          createdAt: at,
+          createdBy: 'system',
+        });
         return {
           ...profile,
           currentPoints: profile.currentPoints - deduct,
@@ -103,6 +119,9 @@ export function awardCompletedOrderRewards(params: {
       referralReferrerPointsAwarded: 0,
       referralReferredCustomerPointsAwarded: 0,
       redemptionFinalized,
+      newRewardTransactions,
+      newReferralEvent,
+      newReferralCodeEntry,
     };
   }
 
@@ -114,6 +133,9 @@ export function awardCompletedOrderRewards(params: {
       referralReferrerPointsAwarded: 0,
       referralReferredCustomerPointsAwarded: 0,
       redemptionFinalized,
+      newRewardTransactions,
+      newReferralEvent,
+      newReferralCodeEntry,
     };
   }
 
@@ -147,8 +169,10 @@ export function awardCompletedOrderRewards(params: {
   const awardedAt = new Date().toISOString();
 
   if (!existingProfile) {
+    const newProfileId = createShortId('RWD');
+    const newReferralCode = generateReferralCode(order.customerName);
     const newProfile: RewardProfile = {
-      id: createShortId('RWD'),
+      id: newProfileId,
       customerName: order.customerName,
       phone: order.phone,
       email: order.email || undefined,
@@ -158,7 +182,7 @@ export function awardCompletedOrderRewards(params: {
       totalOrders: 1,
       lastOrderDate: awardedAt,
       smsMarketingOptIn: !!order.smsMarketingOptIn,
-      referralCode: generateReferralCode(order.customerName),
+      referralCode: newReferralCode,
       referredByCode: referralEligible ? normalizedReferralCodeUsed : undefined,
       successfulReferralCount: 0,
       lifetimeReferralPointsEarned: referralReferredCustomerPointsAwarded,
@@ -182,8 +206,63 @@ export function awardCompletedOrderRewards(params: {
       ],
     };
 
+    // Create RewardTransaction records
+    if (basePointsToAward > 0) {
+      newRewardTransactions.push({
+        id: createShortId('RWT'),
+        profileId: newProfileId,
+        profilePhone: order.phone,
+        profileName: order.customerName,
+        type: 'earned',
+        points: basePointsToAward,
+        orderId: order.id,
+        note: 'Points awarded when order was marked completed.',
+        createdAt: awardedAt,
+        createdBy: 'system',
+      });
+    }
+    if (referralReferredCustomerPointsAwarded > 0) {
+      newRewardTransactions.push({
+        id: createShortId('RWT'),
+        profileId: newProfileId,
+        profilePhone: order.phone,
+        profileName: order.customerName,
+        type: 'referral-bonus',
+        points: referralReferredCustomerPointsAwarded,
+        orderId: order.id,
+        note: `Referral bonus from code ${normalizedReferralCodeUsed}.`,
+        createdAt: awardedAt,
+        createdBy: 'system',
+      });
+    }
+
+    // Create ReferralCode entry for the new profile
+    newReferralCodeEntry = {
+      id: `RFC-${newProfileId}`,
+      code: newReferralCode,
+      ownerProfileId: newProfileId,
+      ownerPhone: order.phone,
+      ownerName: order.customerName,
+      isActive: true,
+      createdAt: awardedAt,
+    };
+
     const updatedProfiles = [newProfile, ...rewardProfiles].map(profile => {
       if (!referralEligible || !referralProfile || normalizePhone(profile.phone) !== normalizePhone(referralProfile.phone)) return profile;
+      if (referralReferrerPointsAwarded > 0) {
+        newRewardTransactions.push({
+          id: createShortId('RWT'),
+          profileId: profile.id,
+          profilePhone: profile.phone,
+          profileName: profile.customerName,
+          type: 'referral-bonus',
+          points: referralReferrerPointsAwarded,
+          orderId: order.id,
+          note: `Referral reward for ${order.customerName}.`,
+          createdAt: awardedAt,
+          createdBy: 'system',
+        });
+      }
       return {
         ...profile,
         currentPoints: profile.currentPoints + referralReferrerPointsAwarded,
@@ -201,17 +280,85 @@ export function awardCompletedOrderRewards(params: {
       };
     });
 
+    // Create ReferralEvent if eligible
+    if (referralEligible && referralProfile) {
+      newReferralEvent = {
+        id: createShortId('REV'),
+        referralCode: normalizedReferralCodeUsed,
+        referrerProfileId: referralProfile.id,
+        referrerPhone: referralProfile.phone,
+        referrerName: referralProfile.customerName,
+        referredPhone: order.phone,
+        referredName: order.customerName,
+        orderId: order.id,
+        status: 'completed',
+        referrerBonusPoints: referralReferrerPointsAwarded,
+        referredBonusPoints: referralReferredCustomerPointsAwarded,
+        bonusAwardedAt: awardedAt,
+        isSelfReferral: false,
+        createdAt: awardedAt,
+      };
+    } else if (normalizedReferralCodeUsed && isSelfReferral) {
+      newReferralEvent = {
+        id: createShortId('REV'),
+        referralCode: normalizedReferralCodeUsed,
+        referrerProfileId: newProfileId,
+        referrerPhone: order.phone,
+        referrerName: order.customerName,
+        referredPhone: order.phone,
+        referredName: order.customerName,
+        orderId: order.id,
+        status: 'rejected',
+        referrerBonusPoints: 0,
+        referredBonusPoints: 0,
+        isSelfReferral: true,
+        createdAt: awardedAt,
+      };
+    }
+
     return {
       updatedProfiles,
       awardedPoints: totalCustomerPointsAwarded,
       referralReferrerPointsAwarded,
       referralReferredCustomerPointsAwarded,
       redemptionFinalized,
+      newRewardTransactions,
+      newReferralEvent,
+      newReferralCodeEntry,
     };
   }
 
+  // Existing profile path
   const updatedProfiles = rewardProfiles.map(profile => {
     if (normalizePhone(profile.phone) === normalizedPhone) {
+      if (basePointsToAward > 0) {
+        newRewardTransactions.push({
+          id: createShortId('RWT'),
+          profileId: profile.id,
+          profilePhone: profile.phone,
+          profileName: profile.customerName,
+          type: 'earned',
+          points: basePointsToAward,
+          orderId: order.id,
+          note: 'Points awarded when order was marked completed.',
+          createdAt: awardedAt,
+          createdBy: 'system',
+        });
+      }
+      if (referralReferredCustomerPointsAwarded > 0) {
+        newRewardTransactions.push({
+          id: createShortId('RWT'),
+          profileId: profile.id,
+          profilePhone: profile.phone,
+          profileName: profile.customerName,
+          type: 'referral-bonus',
+          points: referralReferredCustomerPointsAwarded,
+          orderId: order.id,
+          note: `Referral bonus from code ${normalizedReferralCodeUsed}.`,
+          createdAt: awardedAt,
+          createdBy: 'system',
+        });
+      }
       return {
         ...profile,
         referralCode: ensureRewardProfileReferralCode(profile),
@@ -248,6 +395,20 @@ export function awardCompletedOrderRewards(params: {
     }
 
     if (referralEligible && referralProfile && normalizePhone(profile.phone) === normalizePhone(referralProfile.phone)) {
+      if (referralReferrerPointsAwarded > 0) {
+        newRewardTransactions.push({
+          id: createShortId('RWT'),
+          profileId: profile.id,
+          profilePhone: profile.phone,
+          profileName: profile.customerName,
+          type: 'referral-bonus',
+          points: referralReferrerPointsAwarded,
+          orderId: order.id,
+          note: `Referral reward for ${order.customerName}.`,
+          createdAt: awardedAt,
+          createdBy: 'system',
+        });
+      }
       return {
         ...profile,
         referralCode: ensureRewardProfileReferralCode(profile),
@@ -269,12 +430,55 @@ export function awardCompletedOrderRewards(params: {
     return profile;
   });
 
+  // Create ReferralEvent if eligible
+  if (referralEligible && referralProfile) {
+    newReferralEvent = {
+      id: createShortId('REV'),
+      referralCode: normalizedReferralCodeUsed,
+      referrerProfileId: referralProfile.id,
+      referrerPhone: referralProfile.phone,
+      referrerName: referralProfile.customerName,
+      referredPhone: order.phone,
+      referredName: order.customerName,
+      orderId: order.id,
+      status: 'completed',
+      referrerBonusPoints: referralReferrerPointsAwarded,
+      referredBonusPoints: referralReferredCustomerPointsAwarded,
+      bonusAwardedAt: awardedAt,
+      isSelfReferral: false,
+      createdAt: awardedAt,
+    };
+  } else if (normalizedReferralCodeUsed && existingProfile) {
+    const selfRef = normalizePhone(existingProfile.phone) === normalizedPhone &&
+      normalizeReferralCode(existingProfile.referralCode || '') === normalizedReferralCodeUsed;
+    if (selfRef) {
+      newReferralEvent = {
+        id: createShortId('REV'),
+        referralCode: normalizedReferralCodeUsed,
+        referrerProfileId: existingProfile.id,
+        referrerPhone: existingProfile.phone,
+        referrerName: existingProfile.customerName,
+        referredPhone: order.phone,
+        referredName: order.customerName,
+        orderId: order.id,
+        status: 'rejected',
+        referrerBonusPoints: 0,
+        referredBonusPoints: 0,
+        isSelfReferral: true,
+        createdAt: awardedAt,
+      };
+    }
+  }
+
   return {
     updatedProfiles,
     awardedPoints: totalCustomerPointsAwarded,
     referralReferrerPointsAwarded,
     referralReferredCustomerPointsAwarded,
     redemptionFinalized,
+    newRewardTransactions,
+    newReferralEvent,
+    newReferralCodeEntry,
   };
 }
 

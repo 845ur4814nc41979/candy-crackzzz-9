@@ -2,11 +2,12 @@ import { useState } from 'react';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { useAppContext } from '@/context/AppContext';
 import { Badge } from '@/components/ui/badge';
-import { OrderStatus, InventoryTransaction } from '@/types';
+import { OrderStatus, InventoryTransaction, StaffReferralCredit } from '@/types';
 import { ChevronDown, Package, User, Calendar, MapPin, CreditCard, StickyNote, Navigation, AlertTriangle, Boxes, RotateCcw } from 'lucide-react';
-import { awardCompletedOrderRewards } from '@/lib/rewards';
+import { awardCompletedOrderRewards, normalizePhone } from '@/lib/rewards';
 import { buildGoogleMapsDirectionsUrl, hasUsableAddress } from '@/lib/directions';
 import { Button } from '@/components/ui/button';
+import { calculateStaffReferralBonus, getStaffReferralSettings, normalizeStaffReferralCode } from '@/lib/staffReferral';
 
 const ALL_STATUSES: OrderStatus[] = ['new', 'pending', 'confirmed', 'ready', 'picked-up', 'completed', 'cancelled'];
 
@@ -31,7 +32,12 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 };
 
 export default function AdminOrdersReferralBadges() {
-  const { orders, setOrders, settings, rewardProfiles, setRewardProfiles, products, inventoryItems, setInventoryItems, inventoryTransactions, setInventoryTransactions } = useAppContext();
+  const {
+    orders, setOrders, settings, rewardProfiles, setRewardProfiles,
+    products, inventoryItems, setInventoryItems, inventoryTransactions, setInventoryTransactions,
+    rewardTransactions, setRewardTransactions, referralCodes, setReferralCodes,
+    referralEvents, setReferralEvents, staffReferralCredits, setStaffReferralCredits,
+  } = useAppContext();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -65,6 +71,74 @@ export default function AdminOrdersReferralBadges() {
       if (result.updatedProfiles !== rewardProfiles) {
         setRewardProfiles(result.updatedProfiles);
       }
+      if (result.newRewardTransactions.length > 0) {
+        setRewardTransactions(prev => [...result.newRewardTransactions, ...prev]);
+      }
+      if (result.newReferralEvent) {
+        setReferralEvents(prev => [result.newReferralEvent!, ...prev]);
+      }
+      if (result.newReferralCodeEntry) {
+        setReferralCodes(prev => {
+          const exists = prev.some(c => c.code.toUpperCase() === result.newReferralCodeEntry!.code.toUpperCase());
+          return exists ? prev : [result.newReferralCodeEntry!, ...prev];
+        });
+      }
+    }
+
+    // Staff referral bonus — only calculate on first 'completed' transition.
+    // Guards: (1) order must have a staff ref code, (2) must not already be calculated.
+    let staffBonusFields: Partial<typeof targetOrder> = {};
+    const staffRefCode = normalizeStaffReferralCode(targetOrder.employeeReferralCodeUsed || '');
+    const staffSettings = getStaffReferralSettings(settings);
+
+    if (newStatus === 'completed' && staffRefCode && !targetOrder.employeeReferralBonusCalculatedAt) {
+      if (staffSettings.enableStaffReferralProgram) {
+        const customerPhone = normalizePhone(targetOrder.phone);
+        const isFirstCompletedOrder = !orders.some(
+          o =>
+            o.id !== orderId &&
+            normalizePhone(o.phone) === customerPhone &&
+            normalizeStaffReferralCode(o.employeeReferralCodeUsed || '') === staffRefCode &&
+            o.status === 'completed' &&
+            !!o.employeeReferralBonusCalculatedAt,
+        );
+        const bonus = calculateStaffReferralBonus({
+          order: { ...targetOrder, status: 'completed' },
+          settings,
+          isFirstCompletedOrder,
+          rewardPointsAwarded: awardedPoints,
+        });
+        const now = new Date().toISOString();
+        staffBonusFields = {
+          employeeReferralBonusAmount: bonus.amount,
+          employeeReferralBonusStatus: bonus.status,
+          employeeReferralBonusNote: bonus.note,
+          employeeReferralBonusCalculatedAt: now,
+        };
+        // Create StaffReferralCredit record
+        if (bonus.status === 'pending' || bonus.status === 'approved') {
+          const credit: StaffReferralCredit = {
+            id: `SRC-${(globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)).slice(0, 8).toUpperCase()}`,
+            staffCode: staffRefCode,
+            orderId: targetOrder.id,
+            customerName: targetOrder.customerName,
+            customerPhone: targetOrder.phone,
+            orderValue: targetOrder.total,
+            commissionAmount: bonus.amount,
+            status: 'pending',
+            createdAt: now,
+            bonusNote: bonus.note,
+          };
+          setStaffReferralCredits(prev => [credit, ...prev]);
+        }
+      } else {
+        staffBonusFields = {
+          employeeReferralBonusAmount: 0,
+          employeeReferralBonusStatus: 'ineligible',
+          employeeReferralBonusNote: 'Staff Referralzzz is disabled.',
+          employeeReferralBonusCalculatedAt: new Date().toISOString(),
+        };
+      }
     }
 
     const completedAt = new Date().toISOString();
@@ -91,6 +165,7 @@ export default function AdminOrdersReferralBadges() {
         newStatus === 'completed' && wasPendingRedemption && redemptionFinalized
           ? completedAt
           : o.rewardsRedeemedAt,
+      ...staffBonusFields,
     } : o));
   };
 

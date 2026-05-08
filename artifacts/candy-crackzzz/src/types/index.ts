@@ -291,6 +291,82 @@ export interface StaffReferralCode {
   updatedAt?: string;
 }
 
+// ─── Reward Transactions ──────────────────────────────────────────────────────
+
+export type RewardTransactionType =
+  | 'earned' | 'redeemed' | 'adjusted'
+  | 'referral-bonus' | 'birthday-bonus'
+  | 'first-order-bonus' | 'spend-threshold-bonus';
+
+export interface RewardTransaction {
+  id: string;
+  profileId: string;
+  profilePhone: string;
+  profileName?: string;
+  type: RewardTransactionType;
+  points: number;
+  orderId?: string;
+  note?: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+// ─── Referral Codes ───────────────────────────────────────────────────────────
+
+export interface ReferralCode {
+  id: string;
+  code: string;
+  ownerProfileId: string;
+  ownerPhone: string;
+  ownerName: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+// ─── Referral Events ──────────────────────────────────────────────────────────
+
+export type ReferralEventStatus = 'pending' | 'approved' | 'completed' | 'rejected' | 'flagged';
+
+export interface ReferralEvent {
+  id: string;
+  referralCode: string;
+  referrerProfileId: string;
+  referrerPhone: string;
+  referrerName: string;
+  referredPhone: string;
+  referredName: string;
+  orderId: string;
+  status: ReferralEventStatus;
+  referrerBonusPoints: number;
+  referredBonusPoints: number;
+  bonusAwardedAt?: string;
+  isSelfReferral?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+  adminNotes?: string;
+}
+
+// ─── Staff Referral Credits ───────────────────────────────────────────────────
+
+export type StaffReferralCreditStatus = 'pending' | 'credited' | 'paid' | 'rejected';
+
+export interface StaffReferralCredit {
+  id: string;
+  staffCodeId?: string;
+  staffCode: string;
+  orderId: string;
+  customerName: string;
+  customerPhone: string;
+  orderValue: number;
+  commissionAmount: number;
+  status: StaffReferralCreditStatus;
+  paidAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+  adminNotes?: string;
+  bonusNote?: string;
+}
+
 // ----------- Merch -----------
 
 export type MerchStatus = 'available' | 'coming-soon' | 'out-of-stock' | 'limited';
@@ -490,4 +566,6 @@ export interface Settings {
   referralAllowStacking: boolean;
   enableStaffReferralCodes: boolean;
   staffReferralTrackPayout: boolean;
+  staffReferralTrackOrderCount: boolean;
+  staffReferralTrackSalesVolume: boolean;
 }

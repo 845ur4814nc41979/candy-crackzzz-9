@@ -7,11 +7,15 @@ import type {
   MerchItem,
   OrderRequest,
   Product,
+  ReferralCode,
+  ReferralEvent,
   Review,
   RewardProfile,
+  RewardTransaction,
   RewardsCampaign,
   Settings,
   StaffReferralCode,
+  StaffReferralCredit,
 } from '../types';
 
 export type PublicAdminUser = Omit<AdminUser, 'passwordHash'>;
@@ -36,6 +40,10 @@ export interface BootstrapResponse {
     inventory: InventoryItem[];
     inventoryTransactions: InventoryTransaction[];
     staffReferralCodes: StaffReferralCode[];
+    rewardTransactions: RewardTransaction[];
+    referralCodes: ReferralCode[];
+    referralEvents: ReferralEvent[];
+    staffReferralCredits: StaffReferralCredit[];
   };
   auth: AuthSnapshot;
 }

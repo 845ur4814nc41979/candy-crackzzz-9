@@ -162,7 +162,7 @@ export interface SessionRecord {
   startedAt?: string;
 }
 
-export type StateKey = "products" | "orders" | "settings" | "reviews" | "rewardProfiles" | "merch" | "campaigns" | "inventory" | "inventoryTransactions" | "staffReferralCodes";
+export type StateKey = "products" | "orders" | "settings" | "reviews" | "rewardProfiles" | "merch" | "campaigns" | "inventory" | "inventoryTransactions" | "staffReferralCodes" | "rewardTransactions" | "referralCodes" | "referralEvents" | "staffReferralCredits";
 
 export interface PersistedState {
   products: unknown[];
@@ -175,6 +175,10 @@ export interface PersistedState {
   inventory: unknown[];
   inventoryTransactions: unknown[];
   staffReferralCodes: unknown[];
+  rewardTransactions: unknown[];
+  referralCodes: unknown[];
+  referralEvents: unknown[];
+  staffReferralCredits: unknown[];
 }
 
 export interface AuthState {
@@ -214,8 +218,8 @@ export interface NotificationRecord {
   readAt: string | null;
 }
 
-export const STATE_KEYS: StateKey[] = ["products", "orders", "settings", "reviews", "rewardProfiles", "merch", "campaigns", "inventory", "inventoryTransactions", "staffReferralCodes"];
-export const OWNER_ONLY_STATE_KEYS = new Set<StateKey>(["products", "settings", "reviews", "merch", "campaigns", "inventory", "inventoryTransactions", "staffReferralCodes"]);
+export const STATE_KEYS: StateKey[] = ["products", "orders", "settings", "reviews", "rewardProfiles", "merch", "campaigns", "inventory", "inventoryTransactions", "staffReferralCodes", "rewardTransactions", "referralCodes", "referralEvents", "staffReferralCredits"];
+export const OWNER_ONLY_STATE_KEYS = new Set<StateKey>(["products", "settings", "reviews", "merch", "campaigns", "inventory", "inventoryTransactions", "staffReferralCodes", "rewardTransactions", "referralCodes", "referralEvents", "staffReferralCredits"]);
 
 export const DEFAULT_OWNER_USERNAME = normalizeUsername(
   process.env["ADMIN_USERNAME"] ?? process.env["CANDY_CRACKZZZ_DEFAULT_ADMIN_USERNAME"] ?? "owner",
@@ -329,6 +333,8 @@ export const defaultSettings: Record<string, unknown> = {
   referralAllowStacking: false,
   enableStaffReferralCodes: true,
   staffReferralTrackPayout: true,
+  staffReferralTrackOrderCount: true,
+  staffReferralTrackSalesVolume: true,
 };
 
 export const sampleProducts: unknown[] = [
@@ -467,6 +473,10 @@ function freshDefaultDb(): PersistedDb {
       inventory: [],
       inventoryTransactions: [],
       staffReferralCodes: [],
+      rewardTransactions: [],
+      referralCodes: [],
+      referralEvents: [],
+      staffReferralCredits: [],
     },
     auth: {
       users: [createDefaultOwner()],
@@ -525,6 +535,10 @@ function mergeWithDefaults(parsed: Partial<PersistedDb>): PersistedDb {
       inventory: Array.isArray(parsed.state?.inventory) ? parsed.state!.inventory : [],
       inventoryTransactions: Array.isArray(parsed.state?.inventoryTransactions) ? parsed.state!.inventoryTransactions : [],
       staffReferralCodes: Array.isArray(parsed.state?.staffReferralCodes) ? parsed.state!.staffReferralCodes : [],
+      rewardTransactions: Array.isArray(parsed.state?.rewardTransactions) ? parsed.state!.rewardTransactions : [],
+      referralCodes: Array.isArray(parsed.state?.referralCodes) ? parsed.state!.referralCodes : [],
+      referralEvents: Array.isArray(parsed.state?.referralEvents) ? parsed.state!.referralEvents : [],
+      staffReferralCredits: Array.isArray(parsed.state?.staffReferralCredits) ? parsed.state!.staffReferralCredits : [],
     },
     auth: {
       users: Array.isArray(parsed.auth?.users) && parsed.auth!.users.length > 0

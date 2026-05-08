@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
-import { MerchItem, OrderRequest, Product, RewardsCampaign, Review, RewardProfile, Settings, CartItem, InventoryItem, InventoryTransaction, StaffReferralCode } from '../types';
+import { MerchItem, OrderRequest, Product, RewardsCampaign, Review, RewardProfile, Settings, CartItem, InventoryItem, InventoryTransaction, StaffReferralCode, RewardTransaction, ReferralCode, ReferralEvent, StaffReferralCredit } from '../types';
 import { defaultSettings, sampleMerchItems, sampleProducts, sampleCampaigns } from '../lib/defaults';
 import { apiGetBootstrap, apiPersistState } from '../lib/api';
 import { useAuth } from './AuthContext';
@@ -28,6 +28,14 @@ interface AppContextType {
   setInventoryTransactions: React.Dispatch<React.SetStateAction<InventoryTransaction[]>>;
   staffReferralCodes: StaffReferralCode[];
   setStaffReferralCodes: React.Dispatch<React.SetStateAction<StaffReferralCode[]>>;
+  rewardTransactions: RewardTransaction[];
+  setRewardTransactions: React.Dispatch<React.SetStateAction<RewardTransaction[]>>;
+  referralCodes: ReferralCode[];
+  setReferralCodes: React.Dispatch<React.SetStateAction<ReferralCode[]>>;
+  referralEvents: ReferralEvent[];
+  setReferralEvents: React.Dispatch<React.SetStateAction<ReferralEvent[]>>;
+  staffReferralCredits: StaffReferralCredit[];
+  setStaffReferralCredits: React.Dispatch<React.SetStateAction<StaffReferralCredit[]>>;
   addToCart: (item: Omit<CartItem, 'id'>) => void;
   removeFromCart: (id: string) => void;
   clearCart: () => void;
@@ -51,6 +59,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryTransactions, setInventoryTransactions] = useState<InventoryTransaction[]>([]);
   const [staffReferralCodes, setStaffReferralCodes] = useState<StaffReferralCode[]>([]);
+  const [rewardTransactions, setRewardTransactions] = useState<RewardTransaction[]>([]);
+  const [referralCodes, setReferralCodes] = useState<ReferralCode[]>([]);
+  const [referralEvents, setReferralEvents] = useState<ReferralEvent[]>([]);
+  const [staffReferralCredits, setStaffReferralCredits] = useState<StaffReferralCredit[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [usingFallbackDefaults, setUsingFallbackDefaults] = useState(false);
   const [bootstrapTick, setBootstrapTick] = useState(0);
@@ -88,6 +100,29 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setInventoryItems(bootstrap.state.inventory ?? []);
         setInventoryTransactions(bootstrap.state.inventoryTransactions ?? []);
         setStaffReferralCodes((bootstrap.state.staffReferralCodes as StaffReferralCode[]) ?? []);
+        // Reward transactions
+        setRewardTransactions((bootstrap.state.rewardTransactions as RewardTransaction[]) ?? []);
+        // Referral events
+        setReferralEvents((bootstrap.state.referralEvents as ReferralEvent[]) ?? []);
+        // Staff referral credits
+        setStaffReferralCredits((bootstrap.state.staffReferralCredits as StaffReferralCredit[]) ?? []);
+        // Referral codes: load persisted + sync any profiles that have codes not yet indexed
+        {
+          const persisted = (bootstrap.state.referralCodes as ReferralCode[]) ?? [];
+          const persistedSet = new Set(persisted.map((c: ReferralCode) => c.code.toUpperCase()));
+          const fromProfiles = ((bootstrap.state.rewardProfiles as RewardProfile[]) ?? [])
+            .filter(p => p.referralCode && !persistedSet.has((p.referralCode || '').toUpperCase()))
+            .map(p => ({
+              id: `RFC-${p.id}`,
+              code: p.referralCode!,
+              ownerProfileId: p.id,
+              ownerPhone: p.phone,
+              ownerName: p.customerName,
+              isActive: (p.status ?? 'active') !== 'inactive',
+              createdAt: p.lastOrderDate || new Date().toISOString(),
+            } as ReferralCode));
+          setReferralCodes([...persisted, ...fromProfiles]);
+        }
         setUsingFallbackDefaults(false);
       } catch (error) {
         console.error('Failed to load backend app state.', error);
@@ -102,6 +137,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setInventoryItems([]);
         setInventoryTransactions([]);
         setStaffReferralCodes([]);
+        setRewardTransactions([]);
+        setReferralCodes([]);
+        setReferralEvents([]);
+        setStaffReferralCredits([]);
         setUsingFallbackDefaults(true);
       } finally {
         if (isMounted) {
@@ -171,6 +210,26 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     void apiPersistState('staffReferralCodes', staffReferralCodes).catch((error) => console.error('Failed to persist staff referral codes.', error));
   }, [staffReferralCodes, isLoaded, isAuthLoaded, isOwner]);
 
+  useEffect(() => {
+    if (!isLoaded || !isAuthLoaded || !isOwner) return;
+    void apiPersistState('rewardTransactions', rewardTransactions).catch((error) => console.error('Failed to persist reward transactions.', error));
+  }, [rewardTransactions, isLoaded, isAuthLoaded, isOwner]);
+
+  useEffect(() => {
+    if (!isLoaded || !isAuthLoaded || !isOwner) return;
+    void apiPersistState('referralCodes', referralCodes).catch((error) => console.error('Failed to persist referral codes.', error));
+  }, [referralCodes, isLoaded, isAuthLoaded, isOwner]);
+
+  useEffect(() => {
+    if (!isLoaded || !isAuthLoaded || !isOwner) return;
+    void apiPersistState('referralEvents', referralEvents).catch((error) => console.error('Failed to persist referral events.', error));
+  }, [referralEvents, isLoaded, isAuthLoaded, isOwner]);
+
+  useEffect(() => {
+    if (!isLoaded || !isAuthLoaded || !isOwner) return;
+    void apiPersistState('staffReferralCredits', staffReferralCredits).catch((error) => console.error('Failed to persist staff referral credits.', error));
+  }, [staffReferralCredits, isLoaded, isAuthLoaded, isOwner]);
+
   const addToCart = (item: Omit<CartItem, 'id'>) => {
     setCart(prev => [...prev, { ...item, id: Math.random().toString(36).substring(2, 9) }]);
   };
@@ -201,6 +260,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       inventoryItems, setInventoryItems,
       inventoryTransactions, setInventoryTransactions,
       staffReferralCodes, setStaffReferralCodes,
+      rewardTransactions, setRewardTransactions,
+      referralCodes, setReferralCodes,
+      referralEvents, setReferralEvents,
+      staffReferralCredits, setStaffReferralCredits,
       addToCart, removeFromCart, clearCart, cartTotal,
       usingFallbackDefaults, retryBootstrap,
     }}>

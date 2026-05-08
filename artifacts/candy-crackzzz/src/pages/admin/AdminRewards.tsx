@@ -12,10 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import {
   Award, CheckCircle2, Gift, Search, Users, Star, TrendingUp, ChevronDown, ChevronRight,
-  Calendar, MessageSquare, Share2, RefreshCw, AlertTriangle, Settings2, X,
+  Calendar, MessageSquare, Share2, RefreshCw, AlertTriangle, Settings2, X, Activity,
 } from 'lucide-react';
 import { calculateEstimatedPoints, ensureRewardProfileReferralCode, normalizePhone } from '@/lib/rewards';
-import type { RewardProfile, RewardsEntryType, Settings } from '@/types';
+import type { ReferralEventStatus, RewardProfile, RewardTransactionType, RewardsEntryType, Settings } from '@/types';
 import ReferralShareButton from '@/components/referrals/ReferralShareButton';
 
 function SectionCard({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
@@ -45,6 +45,32 @@ function entryTypeBadge(type: RewardsEntryType) {
   return <span className={`text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wide ${cls}`}>{entryTypeLabel(type)}</span>;
 }
 
+function txTypeLabel(type: RewardTransactionType) {
+  const labels: Record<RewardTransactionType, string> = {
+    'earned': 'Earned', 'redeemed': 'Redeemed', 'adjusted': 'Adjusted',
+    'referral-bonus': 'Referral Bonus', 'birthday-bonus': 'Birthday Bonus',
+    'first-order-bonus': 'First Order Bonus', 'spend-threshold-bonus': 'Spend Bonus',
+  };
+  return labels[type] ?? type;
+}
+
+function txTypeBadge(type: RewardTransactionType) {
+  const cls =
+    type === 'earned' ? 'bg-emerald-500/20 text-emerald-400' :
+    type === 'redeemed' ? 'bg-primary/20 text-primary' :
+    type === 'adjusted' ? 'bg-amber-500/20 text-amber-400' :
+    'bg-secondary/20 text-secondary';
+  return <span className={`text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wide ${cls}`}>{txTypeLabel(type)}</span>;
+}
+
+const REFERRAL_EVENT_STATUS_STYLES: Record<ReferralEventStatus, string> = {
+  pending: 'bg-amber-500/20 text-amber-400',
+  approved: 'bg-blue-500/20 text-blue-400',
+  completed: 'bg-emerald-500/20 text-emerald-400',
+  rejected: 'bg-red-500/20 text-red-400',
+  flagged: 'bg-orange-500/20 text-orange-400',
+};
+
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-emerald-500/20 text-emerald-400',
   inactive: 'bg-muted text-muted-foreground',
@@ -54,7 +80,7 @@ const STATUS_COLORS: Record<string, string> = {
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 export default function AdminRewards() {
-  const { settings, setSettings, rewardProfiles, setRewardProfiles, orders } = useAppContext();
+  const { settings, setSettings, rewardProfiles, setRewardProfiles, orders, rewardTransactions, referralEvents } = useAppContext();
   const { toast } = useToast();
 
   // Settings form
@@ -170,6 +196,10 @@ export default function AdminRewards() {
         <TabsList className="flex flex-wrap gap-1 h-auto p-1 mb-6">
           <TabsTrigger value="profiles" className="font-black uppercase tracking-wider px-4 py-2.5 flex items-center gap-2">
             <Users className="w-4 h-4" /> Profiles
+          </TabsTrigger>
+          <TabsTrigger value="transactions" className="font-black uppercase tracking-wider px-4 py-2.5 flex items-center gap-2">
+            <Activity className="w-4 h-4" /> Transactions
+            {rewardTransactions.length > 0 && <span className="ml-1 text-[10px] bg-primary/20 text-primary rounded-full px-1.5 py-0.5 font-black">{rewardTransactions.length}</span>}
           </TabsTrigger>
           <TabsTrigger value="referrals" className="font-black uppercase tracking-wider px-4 py-2.5 flex items-center gap-2">
             <Share2 className="w-4 h-4" /> Referral Dashboard
@@ -468,6 +498,64 @@ export default function AdminRewards() {
           </div>
         </TabsContent>
 
+        {/* ─── Transactions Tab ─────────────────────────────────────────────────── */}
+        <TabsContent value="transactions">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Total Transactions', value: rewardTransactions.length },
+                { label: 'Points Earned', value: rewardTransactions.filter(t => t.points > 0).reduce((s, t) => s + t.points, 0).toLocaleString() },
+                { label: 'Points Redeemed', value: Math.abs(rewardTransactions.filter(t => t.type === 'redeemed').reduce((s, t) => s + t.points, 0)).toLocaleString() },
+                { label: 'Referral Bonuses', value: rewardTransactions.filter(t => t.type === 'referral-bonus').length },
+              ].map(stat => (
+                <div key={stat.label} className="bg-card border border-border rounded-2xl p-4">
+                  <div className="text-3xl font-black text-primary">{stat.value}</div>
+                  <div className="text-xs font-black uppercase tracking-wider text-muted-foreground mt-1">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+            {rewardTransactions.length === 0 ? (
+              <div className="bg-card border border-border rounded-2xl p-12 text-center">
+                <Activity className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p className="font-bold text-muted-foreground">No transactions yet.</p>
+                <p className="text-sm text-muted-foreground mt-1">Transactions are created when orders are completed and rewards are awarded.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Points</TableHead>
+                      <TableHead>Order</TableHead>
+                      <TableHead>Note</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...rewardTransactions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 100).map(tx => (
+                      <TableRow key={tx.id}>
+                        <TableCell className="text-xs whitespace-nowrap">{new Date(tx.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <div className="font-bold text-sm">{tx.profileName || '—'}</div>
+                          <div className="text-xs text-muted-foreground">{tx.profilePhone}</div>
+                        </TableCell>
+                        <TableCell>{txTypeBadge(tx.type)}</TableCell>
+                        <TableCell className={`font-black ${tx.points > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {tx.points > 0 ? '+' : ''}{tx.points}
+                        </TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground">{tx.orderId ? tx.orderId.slice(0, 12) + '…' : '—'}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate">{tx.note || '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
         {/* ─── Referral Dashboard Tab ────────────────────────────────────────────── */}
         <TabsContent value="referrals">
           <div className="space-y-6 max-w-5xl">
@@ -559,6 +647,50 @@ export default function AdminRewards() {
                 </div>
               )}
             </SectionCard>
+
+            {/* Referral Events */}
+            {referralEvents.length > 0 && (
+              <SectionCard title="Referral Events" icon={<Activity className="w-4 h-4" />}>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Code</TableHead>
+                        <TableHead>Referrer</TableHead>
+                        <TableHead>New Customer</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Points</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {[...referralEvents].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 50).map(ev => (
+                        <TableRow key={ev.id}>
+                          <TableCell className="text-xs whitespace-nowrap">{new Date(ev.createdAt).toLocaleDateString()}</TableCell>
+                          <TableCell><code className="text-xs bg-muted px-2 py-0.5 rounded font-black text-primary">{ev.referralCode}</code></TableCell>
+                          <TableCell>
+                            <div className="font-bold text-sm">{ev.referrerName}</div>
+                            <div className="text-xs text-muted-foreground">{ev.referrerPhone}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-bold text-sm">{ev.referredName}</div>
+                            <div className="text-xs text-muted-foreground">{ev.referredPhone}</div>
+                            {ev.isSelfReferral && <span className="text-xs text-red-400 font-bold">Self-referral</span>}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wide ${REFERRAL_EVENT_STATUS_STYLES[ev.status]}`}>{ev.status}</span>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {ev.referrerBonusPoints > 0 && <div className="text-emerald-400 font-bold">+{ev.referrerBonusPoints} referrer</div>}
+                            {ev.referredBonusPoints > 0 && <div className="text-primary font-bold">+{ev.referredBonusPoints} friend</div>}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </SectionCard>
+            )}
 
             {/* Referral program description */}
             <SectionCard title="Program Description (shown to customers)" icon={<MessageSquare className="w-4 h-4" />}>

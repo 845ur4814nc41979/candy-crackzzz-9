@@ -12,7 +12,7 @@ import {
   Plus, Search, Tag, Pencil, Trash2, Copy, X, Check, TrendingUp,
   BarChart2, DollarSign, ShoppingCart, AlertCircle,
 } from 'lucide-react';
-import type { StaffReferralCode, StaffReferralCodeType, StaffReferralCodeStatus } from '@/types';
+import type { StaffReferralCode, StaffReferralCodeType, StaffReferralCodeStatus, StaffReferralCredit, StaffReferralCreditStatus } from '@/types';
 
 const CODE_TYPE_LABELS: Record<StaffReferralCodeType, string> = {
   'staff': 'Staff Member',
@@ -55,8 +55,15 @@ function normalizeCode(raw: string) {
   return raw.trim().toUpperCase().replace(/\s+/g, '-').replace(/[^A-Z0-9\-_]/g, '');
 }
 
+const CREDIT_STATUS_STYLES: Record<StaffReferralCreditStatus, string> = {
+  pending: 'bg-amber-500/20 text-amber-400',
+  credited: 'bg-blue-500/20 text-blue-400',
+  paid: 'bg-emerald-500/20 text-emerald-400',
+  rejected: 'bg-red-500/20 text-red-400',
+};
+
 export default function AdminStaffCodes() {
-  const { staffReferralCodes, setStaffReferralCodes, orders, settings } = useAppContext();
+  const { staffReferralCodes, setStaffReferralCodes, staffReferralCredits, setStaffReferralCredits, orders, settings } = useAppContext();
   const { toast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -454,6 +461,95 @@ export default function AdminStaffCodes() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Staff Referral Credits */}
+      {staffReferralCredits.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-black uppercase tracking-wider text-lg flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-primary" /> Credit History
+            </h2>
+            <span className="text-xs text-muted-foreground font-bold">{staffReferralCredits.length} total credits</span>
+          </div>
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/30 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-black uppercase tracking-wider text-xs text-muted-foreground">Date</th>
+                    <th className="text-left px-4 py-3 font-black uppercase tracking-wider text-xs text-muted-foreground">Code</th>
+                    <th className="text-left px-4 py-3 font-black uppercase tracking-wider text-xs text-muted-foreground">Customer</th>
+                    <th className="text-right px-4 py-3 font-black uppercase tracking-wider text-xs text-muted-foreground">Order $</th>
+                    <th className="text-right px-4 py-3 font-black uppercase tracking-wider text-xs text-muted-foreground">Commission</th>
+                    <th className="text-center px-4 py-3 font-black uppercase tracking-wider text-xs text-muted-foreground">Status</th>
+                    <th className="text-left px-4 py-3 font-black uppercase tracking-wider text-xs text-muted-foreground">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...staffReferralCredits]
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    .map((credit, i) => (
+                    <tr key={credit.id} className={`border-b border-border/50 ${i % 2 === 0 ? '' : 'bg-muted/10'}`}>
+                      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(credit.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <code className="text-xs font-black text-primary bg-muted/40 px-2 py-0.5 rounded">
+                          {credit.staffCode}
+                        </code>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-bold">{credit.customerName}</div>
+                        <div className="text-xs text-muted-foreground">{credit.customerPhone}</div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold">${credit.orderValue.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-black text-amber-400">${credit.commissionAmount.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wide ${CREDIT_STATUS_STYLES[credit.status as StaffReferralCreditStatus]}`}>
+                          {credit.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1 flex-wrap">
+                          {credit.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => setStaffReferralCredits(prev => prev.map(c => c.id === credit.id ? { ...c, status: 'credited', updatedAt: new Date().toISOString() } : c))}
+                                className="text-xs font-black px-2 py-1 rounded bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                              >
+                                Mark Credited
+                              </button>
+                              <button
+                                onClick={() => setStaffReferralCredits(prev => prev.map(c => c.id === credit.id ? { ...c, status: 'rejected', updatedAt: new Date().toISOString() } : c))}
+                                className="text-xs font-black px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                          {credit.status === 'credited' && (
+                            <button
+                              onClick={() => setStaffReferralCredits(prev => prev.map(c => c.id === credit.id ? { ...c, status: 'paid', paidAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : c))}
+                              className="text-xs font-black px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                            >
+                              Mark Paid
+                            </button>
+                          )}
+                          {(credit.status === 'paid' || credit.status === 'rejected') && (
+                            <span className="text-xs text-muted-foreground italic">
+                              {credit.status === 'paid' && credit.paidAt ? `Paid ${new Date(credit.paidAt).toLocaleDateString()}` : '—'}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 

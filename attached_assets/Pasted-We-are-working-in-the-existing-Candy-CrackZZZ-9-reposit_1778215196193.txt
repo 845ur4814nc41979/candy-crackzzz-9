@@ -1,0 +1,115 @@
+We are working in the existing Candy CrackZZZ 9 repository. Do not rebuild the app from scratch.
+
+First inspect the current repo structure and preserve the existing pnpm monorepo, .replit startup, scripts/replit-start.sh, scripts/proxy-server.cjs, API server on port 3001, Vite/frontend on port 5001, Replit preview proxy on port 5000, admin login protection, and file-storage fallback when DATABASE_URL is not set.
+
+The app already has partial rewards, customer referral, and staff referral logic. Do not duplicate it. Improve and finish the existing system.
+
+Current issue:
+Rewards/referrals are partially built, but the storage/data model is missing the fuller standalone collections we need:
+- rewardTransactions
+- referralCodes
+- referralEvents
+- staffReferralCredits
+
+The current storage has rewardProfiles and staffReferralCodes, but we need to add the missing structures while keeping backward compatibility with existing products, merch, orders, settings, campaigns, inventory, admin users, and saved data.
+
+Main tasks:
+1. Add backward-compatible top-level state/storage keys:
+- rewardTransactions
+- referralCodes
+- referralEvents
+- staffReferralCredits
+
+2. Update PersistedState, StateKey, STATE_KEYS, default DB creation, mergeWithDefaults, and any bootstrap/persist logic so these new arrays load/save correctly in both database mode and file-storage fallback mode.
+
+3. Keep existing rewardProfiles.rewardsHistory working, but also create/use rewardTransactions as a cleaner transaction ledger for:
+- earned points
+- redeemed points
+- manual adjustments
+- referral bonuses
+- birthday/first order/spend threshold bonuses
+
+4. Add referralEvents for customer referral tracking:
+- referral code used
+- referred customer
+- referrer customer
+- order ID
+- status: pending, approved, completed, rejected, flagged
+- timestamps
+- prevent self-referrals by same phone
+- prevent duplicate referral bonuses for same referred customer
+
+5. Add staffReferralCredits for staff/source referral tracking:
+- staff/source code used
+- order ID
+- customer name/phone
+- order value
+- status: pending, credited, paid, rejected
+- bonus/commission amount if configured
+- paid/unpaid tracking
+- timestamps
+
+6. Do not remove existing staffReferralCodes. Keep it and improve it if needed.
+
+7. Update checkout/order creation so orders can store:
+- customer referral code used
+- matched referrer profile/code
+- staff/source referral code used
+- matched staff/source referral record
+- points earned
+- points redeemed
+- referral reward status
+- staff credit status
+
+8. Update order completion logic so when an order is marked completed:
+- regular rewards points are awarded once
+- first-order bonus is awarded once
+- customer referral bonuses are awarded once
+- staff referral credit is created/updated once
+- duplicate awards do not happen if the order is marked completed more than once
+
+9. Update admin rewards/referral/staff pages or add practical tabs/cards so admin can view:
+- reward profiles
+- reward transactions/history
+- customer referral events
+- referral code usage
+- staff referral codes
+- staff referral credits
+- pending/completed/rejected/paid statuses
+- simple leaderboards
+
+10. Update settings as needed for:
+- rewards enable/disable
+- points per dollar
+- first order bonus
+- birthday bonus
+- double points
+- spend threshold bonus
+- min/max redemption
+- customer referrals enable/disable
+- referrer bonus
+- new customer bonus
+- minimum referral order amount
+- referral stacking
+- staff referrals enable/disable
+- track staff order count
+- track staff sales volume
+- paid/unpaid tracking
+
+Important rules:
+- Use pnpm, not npm.
+- Do not add Stripe, Square, Twilio, Resend, Google, or OpenAI API requirements.
+- Do not require paid APIs.
+- Do not remove or break scripts/replit-start.sh.
+- Do not remove or break scripts/proxy-server.cjs.
+- Do not remove admin protection.
+- Do not wipe existing saved data.
+- Keep file-storage fallback working when DATABASE_URL is not set.
+- Keep the app mobile-friendly and Candy CrackZZZ styled.
+
+Before finishing, run:
+pnpm run validate:replit
+pnpm run typecheck
+pnpm run build
+
+Fix any errors until all three pass.

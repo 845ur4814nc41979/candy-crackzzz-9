@@ -131,6 +131,8 @@ export const defaultSettings: Settings = {
   referralAllowStacking: false,
   enableStaffReferralCodes: true,
   staffReferralTrackPayout: true,
+  staffReferralTrackOrderCount: true,
+  staffReferralTrackSalesVolume: true,
 };
 
 export const sampleProducts: Product[] = [
