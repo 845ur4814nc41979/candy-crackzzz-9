@@ -50,6 +50,26 @@ export interface BootstrapResponse {
 
 const API_PREFIX = '/api/cc';
 
+// Cache the last state snapshot loaded from /bootstrap so the app does not
+// immediately re-save every state key back to the server on page load.
+// This prevents a startup write-storm that can make Replit Preview feel frozen.
+const persistedStateCache = new Map<keyof BootstrapResponse['state'], string>();
+
+function serializeStateForCache(value: unknown) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
+}
+
+function seedPersistedStateCache(state: BootstrapResponse['state']) {
+  (Object.keys(state) as Array<keyof BootstrapResponse['state']>).forEach((key) => {
+    persistedStateCache.set(key, serializeStateForCache(state[key]));
+  });
+}
+
+
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_PREFIX}${path}`, {
     credentials: 'include',
@@ -69,15 +89,26 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-export function apiGetBootstrap() {
-  return apiRequest<BootstrapResponse>('/bootstrap', { method: 'GET' });
+export async function apiGetBootstrap() {
+  const bootstrap = await apiRequest<BootstrapResponse>('/bootstrap', { method: 'GET' });
+  seedPersistedStateCache(bootstrap.state);
+  return bootstrap;
 }
 
-export function apiPersistState<K extends keyof BootstrapResponse['state']>(key: K, value: BootstrapResponse['state'][K]) {
-  return apiRequest<{ ok: true }>(`/state/${key}`, {
+export async function apiPersistState<K extends keyof BootstrapResponse['state']>(key: K, value: BootstrapResponse['state'][K]) {
+  const serialized = serializeStateForCache(value);
+
+  if (persistedStateCache.get(key) === serialized) {
+    return { ok: true } as { ok: true };
+  }
+
+  const result = await apiRequest<{ ok: true }>(`/state/${key}`, {
     method: 'PUT',
     body: JSON.stringify({ value }),
   });
+
+  persistedStateCache.set(key, serialized);
+  return result;
 }
 
 export function apiSetupAdmin(username: string, password: string) {
