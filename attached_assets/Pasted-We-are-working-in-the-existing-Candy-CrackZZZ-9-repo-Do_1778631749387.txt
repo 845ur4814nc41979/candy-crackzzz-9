@@ -1,0 +1,90 @@
+We are working in the existing Candy CrackZZZ 9 repo. Do not rebuild the app from scratch.
+
+Twilio is configured and working. A direct curl test to /api/cc/orders/notify successfully sends SMS with sms.sent true. However, submitting a real customer order from the Preview checkout does not send an SMS notification.
+
+Known facts:
+- TWILIO_ACCOUNT_SID is set.
+- TWILIO_AUTH_TOKEN is set.
+- TWILIO_FROM_PHONE is set.
+- ORDER_NOTIFICATION_PHONE is set to one phone number only.
+- Direct backend curl test works and sends SMS.
+- The live customer checkout/order submission does not send the SMS.
+- The app uses pnpm monorepo.
+- API must stay on port 3001.
+- Vite/frontend must stay on port 5001.
+- Preview proxy must stay on port 5000.
+- Do not break scripts/replit-start.sh.
+- Do not break scripts/proxy-server.cjs.
+- Do not break admin protection.
+- Do not break rewards, customer referrals, staff referrals, orders, merch, inventory, campaigns, or file-storage/database fallback.
+
+Main task:
+Investigate and fix the real customer checkout/order notification flow so submitting an order from the Preview/customer cart sends the same Twilio SMS notification that the direct curl test sends.
+
+Inspect these files first:
+- artifacts/candy-crackzzz/src/pages/CartPage.tsx
+- artifacts/candy-crackzzz/src/lib/api.ts
+- artifacts/api-server/src/routes/candy.ts
+- artifacts/api-server/src/routes/candy-notify.ts
+- artifacts/candy-crackzzz/src/context/AppContext.tsx
+
+Fix requirements:
+
+1. Backend fallback priority
+Update the /api/cc/orders/notify backend route so SMS destination is chosen in this order:
+- body.toPhone if provided and non-blank
+- process.env.ORDER_NOTIFICATION_PHONE
+- process.env.ADMIN_NOTIFICATION_PHONE
+- skip SMS with a clear reason if none exists
+
+2. Frontend checkout behavior
+Make sure the customer checkout calls apiNotifyOrder every time an order is submitted successfully.
+
+The checkout should pass:
+- settings.businessName
+- settings.orderDestinationEmail or settings.businessEmail if available
+- settings.orderNotificationPhone if available
+- the full order object
+
+But the backend must not depend only on the frontend setting. If settings.orderNotificationPhone is blank, the backend should still use ORDER_NOTIFICATION_PHONE from Replit Secrets.
+
+3. Debug visibility
+Add safe logging or response details so the server response shows:
+- whether SMS was attempted
+- whether SMS was sent
+- whether SMS was skipped
+- the destination source used: body.toPhone, ORDER_NOTIFICATION_PHONE, ADMIN_NOTIFICATION_PHONE, or none
+
+Do not expose Twilio Auth Token or other secrets.
+
+4. Do not silently hide failure
+The order should still save even if SMS fails, but the notification result should be visible in logs and returned from the notify route so admin/debugging can see what happened.
+
+5. Keep one phone number only for now
+Do not add multiple phone support yet.
+Do not parse comma-separated phone lists in this step.
+
+6. Preserve existing behavior
+Do not remove email notification behavior.
+Do not remove message/contact notification behavior.
+Do not break existing apiNotifyOrder.
+Do not break the direct curl test that already works.
+
+7. Add or improve test route if already present
+If there is already an admin test SMS route, keep it working.
+If adding a test route is simple and safe, add an admin-protected test SMS endpoint/button, but do not make that the main focus. The main focus is fixing live checkout order notifications.
+
+After changes, run:
+pnpm run validate:replit
+pnpm run typecheck
+pnpm run build
+
+Fix all errors before finishing.
+
+Final response:
+Give me a short summary of:
+- What was broken
+- What files changed
+- What test proved it works
+- The exact Shell command I should run to test a fake order SMS
+- The exact Preview steps I should use to test a real order

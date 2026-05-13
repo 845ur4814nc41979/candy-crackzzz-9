@@ -3,6 +3,8 @@ export type DeliveryResult = {
   sent: boolean;
   skipped: boolean;
   reason?: string;
+  destinationSource?: 'body.toPhone' | 'ORDER_NOTIFICATION_PHONE' | 'ADMIN_NOTIFICATION_PHONE' | 'none';
+  destination?: string;
 };
 
 export type OrderItem = {
@@ -120,6 +122,16 @@ export function smsProviderStatus() {
       ...(to ? [] : ["ORDER_NOTIFICATION_PHONE"]),
     ],
   };
+}
+
+export function resolveSmsDestination(bodyToPhone?: string) {
+  const body = clean(bodyToPhone);
+  if (body) return { destination: normalizePhone(body), destinationSource: 'body.toPhone' as const };
+  const orderPhone = clean(process.env["ORDER_NOTIFICATION_PHONE"]);
+  if (orderPhone) return { destination: normalizePhone(orderPhone), destinationSource: 'ORDER_NOTIFICATION_PHONE' as const };
+  const adminPhone = clean(process.env["ADMIN_NOTIFICATION_PHONE"]);
+  if (adminPhone) return { destination: normalizePhone(adminPhone), destinationSource: 'ADMIN_NOTIFICATION_PHONE' as const };
+  return { destination: '', destinationSource: 'none' as const };
 }
 
 export async function sendResendEmail(
