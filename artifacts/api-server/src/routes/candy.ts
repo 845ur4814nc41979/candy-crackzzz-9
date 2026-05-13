@@ -271,11 +271,11 @@ router.post("/cc/orders/notify", async (req, res) => {
 
 // Compatibility routes for frontend notification/status/analytics panels.
 // These prevent repeated 404 polling from making the Replit preview/admin UI unstable.
-router.get("/notifications", (_req, res) => {
+router.get("/cc/notifications", (_req, res) => {
   res.json({ notifications: [], unread: 0 });
 });
 
-router.get("/analytics/summary", (_req, res) => {
+router.get("/cc/analytics/summary", (_req, res) => {
   res.json({
     totalViews: 0,
     uniqueVisitors: 0,
@@ -289,15 +289,15 @@ router.get("/analytics/summary", (_req, res) => {
   });
 });
 
-router.get("/analytics/recent", (_req, res) => {
+router.get("/cc/analytics/recent", (_req, res) => {
   res.json({ recentViews: [] });
 });
 
-router.post("/analytics/view", (_req, res) => {
+router.post("/cc/analytics/view", (_req, res) => {
   res.json({ ok: true, skipped: true });
 });
 
-router.get("/status", (_req, res) => {
+router.get("/cc/status", (_req, res) => {
   res.json({
     database: { connected: !!process.env.DATABASE_URL, kind: process.env.DATABASE_URL ? "postgres" : "file-storage" },
     session: {
