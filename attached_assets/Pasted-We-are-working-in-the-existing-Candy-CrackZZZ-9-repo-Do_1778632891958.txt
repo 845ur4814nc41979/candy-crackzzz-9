@@ -1,0 +1,299 @@
+We are working in the existing Candy CrackZZZ 9 repo. Do not rebuild the app from scratch. Do not redesign the app. Do not add unnecessary features. We are low on Replit Agent credits, so work efficiently and make the smallest safe changes needed.
+
+Current emergency:
+The cart/checkout flow is broken after the recent Twilio notification/cart changes.
+
+Current symptoms:
+- Clicking the shopping bag/cart icon opens the cart page.
+- The cart now shows the two items in the cart.
+- But there is no clear way to proceed to checkout or submit the order.
+- The checkout form/proceed/submit button is missing or hidden.
+- This worked before the recent changes.
+- The app should never show a blank cart page or a cart with items and no way to submit.
+
+Important known facts:
+- Twilio backend is working.
+- Direct POST to /api/cc/orders/notify works and sends SMS.
+- Backend fallback to ORDER_NOTIFICATION_PHONE now works.
+- The successful fallback response showed sms.sent true and destinationSource ORDER_NOTIFICATION_PHONE.
+- Keep that Twilio backend fix.
+- Do not break the existing rewards/referrals/staff referral system.
+- Do not break admin protection.
+- Do not break Replit startup.
+- Do not break file-storage/database fallback.
+- Do not break products, merch, orders, inventory, campaigns, messages, analytics, or settings.
+
+Port/startup rules:
+- API stays on port 3001.
+- Vite/frontend stays on port 5001.
+- Preview proxy stays on port 5000.
+- Do not remove or rewrite scripts/replit-start.sh.
+- Do not remove or rewrite scripts/proxy-server.cjs.
+- Do not change .replit unless absolutely necessary.
+
+Main files to inspect first:
+- artifacts/candy-crackzzz/src/pages/CartPage.tsx
+- artifacts/candy-crackzzz/src/context/AppContext.tsx
+- artifacts/candy-crackzzz/src/lib/api.ts
+- artifacts/api-server/src/routes/candy.ts
+- artifacts/api-server/src/routes/candy-notify.ts
+- artifacts/candy-crackzzz/src/components/layout/Navbar.tsx
+- artifacts/candy-crackzzz/src/components/layout/MobileNav.tsx
+- artifacts/candy-crackzzz/src/App.tsx
+- artifacts/candy-crackzzz/src/components/layout/AppErrorBoundary.tsx
+
+Priority 1 — Fix cart/checkout immediately:
+Find exactly why the cart page shows cart items but no checkout/proceed/submit area.
+
+The /cart page must support these states:
+
+A. Empty cart:
+- Show the existing “Your bag is empty” screen.
+- Show a Browse Menu button.
+- Do not crash.
+
+B. Cart with items:
+Show the full checkout/order request flow:
+- Cart item list
+- Subtotal
+- Delivery fee if applicable
+- Rewards discount if applicable
+- Total
+- Contact info form
+- Full name
+- Phone number
+- Email address
+- Rewards/referral section if enabled
+- Staff/promo code section if enabled
+- Pickup/delivery selection
+- Delivery address field if delivery is selected
+- Requested date
+- Requested time
+- Payment method/options if payment settings are enabled
+- Special instructions / notes field
+- A clearly visible final submit button at the bottom
+
+The final button text should be:
+“Submit Order Request”
+or
+“Place Order Request”
+
+The submit button must be visible and usable on both mobile and desktop.
+
+Do not hide the submit button just because payment settings are disabled. If payments are disabled, the customer should still be able to submit an order request.
+
+Priority 2 — Preserve working order submission:
+When the customer submits the order:
+- Save the order into app state/orders.
+- Preserve rewards opt-in behavior.
+- Preserve reward profile creation behavior.
+- Preserve customer referral behavior.
+- Preserve staff/source referral behavior.
+- Preserve redemption behavior if present.
+- Preserve cart clearing if that previously happened.
+- Preserve redirect to order success if that previously happened.
+- Call apiNotifyOrder.
+- apiNotifyOrder should still hit /api/cc/orders/notify.
+- Backend should still fall back to ORDER_NOTIFICATION_PHONE if settings.orderNotificationPhone is blank.
+- If notification fails, still save the order and show a friendly toast/message.
+- Do not allow notification failure to stop the order from being saved.
+
+Priority 3 — Cart self-healing, but make it customer-friendly:
+If old/broken/corrupt localStorage cart data is detected:
+- Clear only the local browser cart in localStorage.
+- Do not reset products.
+- Do not reset orders.
+- Do not reset settings.
+- Do not reset rewards.
+- Do not reset referrals.
+- Do not reset staff codes.
+- Do not reset inventory.
+- Do not reset backend/database data.
+
+Do not show technical customer messages like:
+“old data was no longer compatible”
+
+Use this friendly message instead:
+“Your cart was refreshed. Please add your items again.”
+
+Cart localStorage parsing rules:
+- Safely parse JSON.
+- Verify parsed cart is an array.
+- Sanitize each cart item.
+- Remove invalid items.
+- If parsing fails, clear only the cart key and continue with an empty cart.
+- Never throw an error from cart loading.
+
+Sanitize cart items:
+- id must exist or be regenerated.
+- productId must exist or fallback to id.
+- name must fallback to “Custom Item”.
+- quantity must be a positive number, fallback to 1.
+- price can be null, but undefined/non-number should become null.
+- imageUrl should fallback to a safe placeholder or empty string.
+- itemType should fallback to “candy” when missing.
+
+CartPage rendering rules:
+- Never call methods on undefined values.
+- Never assume price, imageUrl, name, quantity, productId, eventType, specialInstructions, or colorThemeNotes are present.
+- If an item image is missing, render a safe placeholder instead of crashing.
+- If sanitized cart becomes empty, show the empty cart state.
+
+Priority 4 — Keep Twilio admin/business order notification working:
+Do not break the current working backend route:
+POST /api/cc/orders/notify
+
+The backend SMS destination priority should remain:
+1. body.toPhone if provided and non-blank
+2. process.env.ORDER_NOTIFICATION_PHONE
+3. process.env.ADMIN_NOTIFICATION_PHONE
+4. skip SMS with a clear reason if none exists
+
+The response should show:
+- sms.attempted
+- sms.sent
+- sms.skipped
+- sms.reason if failed/skipped
+- sms.destinationSource
+- masked destination, not full sensitive details
+
+Do not expose:
+- TWILIO_AUTH_TOKEN
+- full secrets
+- sensitive env values
+
+Priority 5 — Add customer order-status SMS, only after cart/checkout is fixed:
+After the cart form and submit button are restored and working, add customer order-status text notifications.
+
+This should be transactional order updates only, not marketing.
+
+When an admin changes an order status, optionally send a text to the customer’s order phone number.
+
+Statuses that should be eligible:
+- confirmed
+- ready
+- picked-up
+- completed
+- cancelled
+
+Do not text the customer on every small edit. Only text on meaningful status changes.
+
+Add an admin setting/toggle if practical:
+“Send customer SMS order status updates”
+
+If the setting is off, do not send customer status texts.
+
+If customer phone is missing, skip with a clear reason.
+
+Use the same Twilio configuration:
+- TWILIO_ACCOUNT_SID
+- TWILIO_AUTH_TOKEN
+- TWILIO_FROM_PHONE
+- TWILIO_MESSAGING_SERVICE_SID optional
+
+Important:
+- ORDER_NOTIFICATION_PHONE is for admin/business alerts.
+- Customer status texts must go to the customer’s order phone number.
+- Do not send customer status texts to ORDER_NOTIFICATION_PHONE.
+- Do not expose Twilio secrets to frontend.
+- Do not add marketing/promotional texts in this step.
+
+Suggested customer SMS messages:
+confirmed:
+“Candy CrackZZZ update: Your order has been confirmed. We’ll keep you posted.”
+
+ready:
+“Candy CrackZZZ update: Your order is ready.”
+
+picked-up:
+“Candy CrackZZZ update: Your order has been picked up. Thank you!”
+
+completed:
+“Candy CrackZZZ update: Your order is complete. Thank you for choosing Candy CrackZZZ!”
+
+cancelled:
+“Candy CrackZZZ update: Your order was cancelled. Contact us if you have questions.”
+
+If there is not enough time/credits to finish customer status SMS safely:
+- Do not half-build it.
+- Leave a clear TODO in a markdown file.
+- Finish the cart/checkout repair first.
+
+Priority 6 — Low-credit continuation support:
+Because we are low on Replit Agent credits, create or update a markdown file at the project root named:
+
+CANDY_CRACKZZZ_CONTINUATION_NOTES.md
+
+This file must include:
+- What was broken
+- What was fixed
+- Files changed
+- What still needs testing
+- Any remaining TODOs
+- Exact shell commands to restart the app
+- Exact shell commands to test backend Twilio notification
+- Exact Preview steps to test cart/checkout
+- Exact Preview/admin steps to test customer status SMS if implemented
+- Any known build warnings or unrelated issues
+- A “safe next prompt” I can paste into another Agent session later if needed
+
+Also include a short section:
+“Manual work possible without Agent”
+Explain any simple things I can still do in Shell or the UI after credits run out, such as:
+- restart app
+- run typecheck/build
+- test backend notification with curl
+- change Replit Secrets
+- edit admin settings
+- push to GitHub
+
+Priority 7 — Validation:
+Run these commands and fix relevant errors:
+
+pnpm --filter @workspace/candy-crackzzz run typecheck
+pnpm --filter @workspace/candy-crackzzz run build
+pnpm --filter @workspace/api-server run typecheck
+pnpm --filter @workspace/api-server run build
+pnpm run validate:replit
+
+If full root build fails only because of the pre-existing mockup-sandbox PORT issue, state that clearly. The Candy frontend and API server must pass.
+
+Do not waste time fixing unrelated mockup-sandbox issues unless they directly affect Candy CrackZZZ.
+
+Priority 8 — Final response:
+Give me a short, plain-English final report:
+- What broke the cart/checkout
+- What files changed
+- Whether the shopping bag now opens /cart correctly
+- Whether cart with items shows the checkout form
+- Whether the submit button is visible
+- Whether order submission saves the order
+- Whether backend Twilio admin notification still works
+- Whether live checkout order notification works
+- Whether customer status SMS was added
+- Any unfinished TODOs
+- Exact shell restart command
+- Exact backend SMS curl test command
+- Exact Preview test steps
+
+Required Preview test steps:
+1. Open Preview
+2. Go to Menu
+3. Add item to cart
+4. Click shopping bag
+5. Confirm cart items show
+6. Confirm checkout form shows
+7. Confirm Submit Order Request button shows
+8. Submit the order
+9. Confirm order success page
+10. Confirm admin/business SMS notification is received
+11. Go to /admin/orders
+12. Confirm new order appears
+13. If customer status SMS was added, change status to confirmed or ready
+14. Confirm customer receives status SMS
+
+Do not push to GitHub automatically unless asked. After finishing, tell me to run:
+git status
+git add -A
+git commit -m "Repair cart checkout and preserve Twilio notifications"
+git push -u origin main
