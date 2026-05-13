@@ -1,0 +1,65 @@
+We are working in the existing Candy CrackZZZ 9 repo. Do not rebuild the app.
+
+The /cart page is going blank when clicking the shopping bag icon. Typecheck and frontend build both pass, so this is likely a runtime crash caused by bad localStorage cart data or unsafe cart rendering.
+
+I do not want to use the browser console. Fix this in the app code.
+
+Main task:
+Make the cart page self-healing so bad/corrupt/incompatible cart localStorage data can never blank the page.
+
+Inspect:
+- artifacts/candy-crackzzz/src/context/AppContext.tsx
+- artifacts/candy-crackzzz/src/pages/CartPage.tsx
+- artifacts/candy-crackzzz/src/components/layout/Navbar.tsx
+- artifacts/candy-crackzzz/src/components/layout/MobileNav.tsx
+- artifacts/candy-crackzzz/src/App.tsx
+
+Requirements:
+1. In AppContext, when loading cart from localStorage:
+   - safely parse JSON
+   - verify it is an array
+   - sanitize every cart item
+   - remove invalid items
+   - if parsing fails, clear only localStorage cart and use an empty cart
+   - never throw an error from cart loading
+
+2. Sanitize cart items:
+   - id must exist or be regenerated
+   - productId must exist or fallback to id
+   - name must fallback to "Custom Item"
+   - quantity must be a positive number, fallback to 1
+   - price can be null, but undefined/non-number should become null
+   - imageUrl must fallback to a safe placeholder or empty string
+   - itemType should fallback to "candy" when missing
+
+3. In CartPage:
+   - defensively render cart items even if an item has missing/old fields
+   - never call methods on undefined values
+   - never assume price, imageUrl, name, quantity, or productId are present
+   - if cart becomes empty after sanitizing, show the “Your bag is empty” screen
+
+4. Add a safe customer-facing fallback:
+   If a cart data error is detected, clear only the cart, show the empty cart page, and optionally show a toast saying:
+   “Your cart was reset because old cart data was no longer compatible.”
+
+5. Keep the Twilio live checkout notification fix.
+6. Keep checkout order submission working.
+7. Keep rewards, referrals, staff referrals, admin protection, Replit startup, and file-storage/database fallback working.
+8. Do not remove any cart/checkout features.
+
+Run:
+pnpm --filter @workspace/candy-crackzzz run typecheck
+pnpm --filter @workspace/candy-crackzzz run build
+pnpm run validate:replit
+pnpm run typecheck
+
+Fix all errors before finishing.
+
+Final response:
+Tell me:
+- What caused the blank cart page
+- What files changed
+- Whether cart localStorage now self-heals
+- Whether the shopping bag opens /cart correctly
+- Whether checkout SMS still works
+- Exact Preview test steps

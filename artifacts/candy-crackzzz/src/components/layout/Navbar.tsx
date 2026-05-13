@@ -11,7 +11,7 @@ export default function Navbar() {
   const { cart, settings } = useAppContext();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const cartItemsCount = cart.reduce((acc, item) => acc + item.quantity, 0);
+  const cartItemsCount = cart.reduce((acc, item) => acc + (item?.quantity || 0), 0);
 
   const navLinks = [
     { href: '/', label: 'Home' },

@@ -46,6 +46,32 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+function sanitizeCartItem(raw: unknown, index: number): CartItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const item = raw as Partial<CartItem> & { [key: string]: unknown };
+  const id = typeof item.id === 'string' && item.id.trim() ? item.id.trim() : `cart-${index}-${Math.random().toString(36).slice(2, 8)}`;
+  const productId = typeof item.productId === 'string' && item.productId.trim() ? item.productId.trim() : id;
+  const name = typeof item.name === 'string' && item.name.trim() ? item.name.trim() : 'Custom Item';
+  const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) && item.quantity > 0 ? Math.floor(item.quantity) : 1;
+  const price = typeof item.price === 'number' && Number.isFinite(item.price) ? item.price : null;
+  const imageUrl = typeof item.imageUrl === 'string' ? item.imageUrl : '';
+  const itemType = item.itemType === 'merch' ? 'merch' : 'candy';
+  return {
+    id,
+    productId,
+    name,
+    price,
+    quantity,
+    imageUrl,
+    itemType,
+    specialInstructions: typeof item.specialInstructions === 'string' ? item.specialInstructions : undefined,
+    eventType: typeof item.eventType === 'string' ? item.eventType : undefined,
+    colorThemeNotes: typeof item.colorThemeNotes === 'string' ? item.colorThemeNotes : undefined,
+    selectedSize: typeof item.selectedSize === 'string' ? item.selectedSize : undefined,
+    selectedColor: typeof item.selectedColor === 'string' ? item.selectedColor : undefined,
+  };
+}
+
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const { isLoaded: isAuthLoaded, isOwner } = useAuth();
   const [products, setProducts] = useState<Product[]>(sampleProducts);
@@ -74,12 +100,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const loadedCart = localStorage.getItem('cart');
-    if (loadedCart) {
-      try {
-        setCart(JSON.parse(loadedCart));
-      } catch {
-        setCart([]);
+    if (!loadedCart) return;
+    try {
+      const parsed = JSON.parse(loadedCart);
+      if (!Array.isArray(parsed)) throw new Error('Cart is not an array');
+      const sanitized = parsed.map(sanitizeCartItem).filter((item): item is CartItem => !!item);
+      setCart(sanitized);
+      if (sanitized.length !== parsed.length) {
+        localStorage.setItem('cart', JSON.stringify(sanitized));
       }
+    } catch {
+      localStorage.removeItem('cart');
+      setCart([]);
     }
   }, []);
 
@@ -100,13 +132,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setInventoryItems(bootstrap.state.inventory ?? []);
         setInventoryTransactions(bootstrap.state.inventoryTransactions ?? []);
         setStaffReferralCodes((bootstrap.state.staffReferralCodes as StaffReferralCode[]) ?? []);
-        // Reward transactions
         setRewardTransactions((bootstrap.state.rewardTransactions as RewardTransaction[]) ?? []);
-        // Referral events
         setReferralEvents((bootstrap.state.referralEvents as ReferralEvent[]) ?? []);
-        // Staff referral credits
         setStaffReferralCredits((bootstrap.state.staffReferralCredits as StaffReferralCredit[]) ?? []);
-        // Referral codes: load persisted + sync any profiles that have codes not yet indexed
         {
           const persisted = (bootstrap.state.referralCodes as ReferralCode[]) ?? [];
           const persistedSet = new Set(persisted.map((c: ReferralCode) => c.code.toUpperCase()));
@@ -141,6 +169,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setReferralCodes([]);
         setReferralEvents([]);
         setStaffReferralCredits([]);
+        setCart([]);
+        localStorage.removeItem('cart');
         setUsingFallbackDefaults(true);
       } finally {
         if (isMounted) {

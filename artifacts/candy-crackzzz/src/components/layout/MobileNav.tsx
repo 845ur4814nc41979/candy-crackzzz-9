@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function MobileNav() {
   const [location] = useLocation();
   const { cart } = useAppContext();
-  const cartItemsCount = cart.reduce((acc, item) => acc + item.quantity, 0);
+  const cartItemsCount = cart.reduce((acc, item) => acc + (item?.quantity || 0), 0);
 
   const navItems = [
     { href: '/', icon: Home, label: 'Home' },
@@ -30,7 +30,6 @@ export default function MobileNav() {
             >
               <item.icon className={`w-6 h-6 ${isActive ? 'drop-shadow-[0_0_8px_rgba(255,0,255,0.8)]' : ''}`} />
               <span className="text-[10px] font-bold uppercase tracking-wider">{item.label}</span>
-              
               {item.badge !== undefined && item.badge > 0 && (
                 <AnimatePresence>
                   <motion.div
