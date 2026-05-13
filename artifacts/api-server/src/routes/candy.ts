@@ -268,4 +268,58 @@ router.post("/cc/orders/notify", async (req, res) => {
   }
 });
 
+
+// Compatibility routes for frontend notification/status/analytics panels.
+// These prevent repeated 404 polling from making the Replit preview/admin UI unstable.
+router.get("/notifications", (_req, res) => {
+  res.json({ notifications: [], unread: 0 });
+});
+
+router.get("/analytics/summary", (_req, res) => {
+  res.json({
+    totalViews: 0,
+    uniqueVisitors: 0,
+    viewsToday: 0,
+    viewsThisWeek: 0,
+    viewsThisMonth: 0,
+    topPages: [],
+    recentViews: [],
+    deviceBreakdown: [],
+    referrerBreakdown: []
+  });
+});
+
+router.get("/analytics/recent", (_req, res) => {
+  res.json({ recentViews: [] });
+});
+
+router.post("/analytics/view", (_req, res) => {
+  res.json({ ok: true, skipped: true });
+});
+
+router.get("/status", (_req, res) => {
+  res.json({
+    database: { connected: !!process.env.DATABASE_URL, kind: process.env.DATABASE_URL ? "postgres" : "file-storage" },
+    session: {
+      sessionSecretConfigured: !!process.env.SESSION_SECRET,
+      adminUsernameConfigured: !!process.env.ADMIN_USERNAME,
+      adminPasswordConfigured: !!process.env.ADMIN_PASSWORD
+    },
+    email: {
+      configured: !!process.env.RESEND_API_KEY,
+      missing: process.env.RESEND_API_KEY ? [] : ["RESEND_API_KEY"]
+    },
+    sms: {
+      configured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_PHONE),
+      missing: [
+        ...(!process.env.TWILIO_ACCOUNT_SID ? ["TWILIO_ACCOUNT_SID"] : []),
+        ...(!process.env.TWILIO_AUTH_TOKEN ? ["TWILIO_AUTH_TOKEN"] : []),
+        ...(!process.env.TWILIO_FROM_PHONE ? ["TWILIO_FROM_PHONE"] : [])
+      ]
+    },
+    businessName: null
+  });
+});
+
+
 export default router;
