@@ -1,25 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Candy CrackZZZ 8.4 — self-healing Replit startup
-#
-# Final rule:
-#   3001 = API server
-#   5001 = Vite frontend
-#   5000 = Preview proxy
-#
-# This script starts missing services only.
-# It does not blindly start duplicates.
-# It does not manually start Replit artifact-router.
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 API_PORT="${API_PORT:-3001}"
-FRONTEND_PORT="${FRONTEND_PORT:-5001}"
 PREVIEW_PROXY_PORT="${PREVIEW_PROXY_PORT:-5000}"
-VITE_TARGET_PORT="${VITE_TARGET_PORT:-5001}"
-
 LOCK_DIR="/tmp/candy-crackzzz-start.lock"
 
 is_up() {
@@ -41,17 +27,21 @@ wait_for() {
     fi
     sleep 1
   done
+
   echo "$label is up."
 }
 
-free_proxy_port_only() {
+free_port() {
+  local port="$1"
+  local label="$2"
   local pids=""
+
   if command -v lsof >/dev/null 2>&1; then
-    pids="$(lsof -ti tcp:"$PREVIEW_PROXY_PORT" 2>/dev/null || true)"
+    pids="$(lsof -ti tcp:"$port" 2>/dev/null || true)"
   fi
 
   if [ -n "$pids" ]; then
-    echo "Freeing preview proxy port $PREVIEW_PROXY_PORT only (pids: $pids)..."
+    echo "Freeing $label port $port (pids: $pids)..."
     echo "$pids" | xargs kill -9 2>/dev/null || true
     sleep 1
   fi
@@ -60,16 +50,17 @@ free_proxy_port_only() {
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   echo "Another Candy CrackZZZ startup is already running."
   echo "Waiting for preview proxy on $PREVIEW_PROXY_PORT..."
+
   while ! is_up "http://127.0.0.1:${PREVIEW_PROXY_PORT}/"; do
     sleep 1
   done
+
   echo "Preview proxy is available. Holding workflow alive."
   tail -f /dev/null
 fi
 
 cleanup() {
   kill "${API_PID:-}" 2>/dev/null || true
-  kill "${VITE_PID:-}" 2>/dev/null || true
   kill "${PROXY_PID:-}" 2>/dev/null || true
   rmdir "$LOCK_DIR" 2>/dev/null || true
 }
@@ -86,36 +77,30 @@ else
   echo "DATABASE_URL not set — using file-storage fallback."
 fi
 
-echo "Checking API on $API_PORT..."
-if is_up "http://127.0.0.1:${API_PORT}/api/cc/bootstrap"; then
-  echo "API already running on $API_PORT. Not starting duplicate."
-else
-  echo "API is down. Starting API on $API_PORT..."
-  PORT="$API_PORT" API_PORT="$API_PORT" pnpm --filter @workspace/api-server run dev &
-  API_PID=$!
-fi
+echo "Building Candy CrackZZZ frontend..."
+pnpm --filter @workspace/candy-crackzzz run build
 
-echo "Checking Vite website on $FRONTEND_PORT..."
-if is_up "http://127.0.0.1:${FRONTEND_PORT}/"; then
-  echo "Vite already running on $FRONTEND_PORT. Not starting duplicate."
-else
-  echo "Vite is down. Starting Candy CrackZZZ website on $FRONTEND_PORT..."
-  FRONTEND_PORT="$FRONTEND_PORT" PORT="$FRONTEND_PORT" API_PORT="$API_PORT" pnpm --filter @workspace/candy-crackzzz run dev &
-  VITE_PID=$!
-fi
+free_port "$API_PORT" "API/static website"
+free_port "$PREVIEW_PROXY_PORT" "preview proxy"
+free_port 5001 "old Vite dev server"
+
+echo "Starting API + built website on $API_PORT..."
+PORT="$API_PORT" API_PORT="$API_PORT" NODE_ENV=development pnpm --filter @workspace/api-server run dev &
+API_PID=$!
 
 wait_for "API" "http://127.0.0.1:${API_PORT}/api/cc/bootstrap" 60
-wait_for "Vite website" "http://127.0.0.1:${FRONTEND_PORT}/" 60
+wait_for "Built website" "http://127.0.0.1:${API_PORT}/" 60
 
-free_proxy_port_only
-
-echo "Starting preview proxy $PREVIEW_PROXY_PORT -> $VITE_TARGET_PORT..."
-PREVIEW_PROXY_PORT="$PREVIEW_PROXY_PORT" VITE_TARGET_PORT="$VITE_TARGET_PORT" node scripts/proxy-server.cjs &
+echo "Starting preview proxy $PREVIEW_PROXY_PORT -> $API_PORT..."
+PREVIEW_PROXY_PORT="$PREVIEW_PROXY_PORT" VITE_TARGET_PORT="$API_PORT" node scripts/proxy-server.cjs &
 PROXY_PID=$!
+
+wait_for "Preview" "http://127.0.0.1:${PREVIEW_PROXY_PORT}/" 60
 
 echo "Candy CrackZZZ is up:"
 echo "  API:     http://127.0.0.1:${API_PORT}/api/cc/bootstrap"
-echo "  Website: http://127.0.0.1:${FRONTEND_PORT}/"
+echo "  Website: http://127.0.0.1:${API_PORT}/"
 echo "  Preview: http://127.0.0.1:${PREVIEW_PROXY_PORT}/"
+echo "Use the normal Replit Start application Preview."
 
 wait "$PROXY_PID"
